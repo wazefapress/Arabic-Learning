@@ -1,0 +1,2402 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق تعلم العربية لغير الناطقين بها</title>
+    
+    <!-- Bootstrap 5 RTL -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    
+    <!-- ربط PWA Manifest -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#3498db">
+
+    <!-- مكتبة Phaser 3 للألعاب التفاعلية -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+
+    <style>
+        body { background-color: #f4f7f6; font-family: sans-serif; padding-top: 15px; padding-bottom: 40px; }
+        .card-box { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .card-box:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .app-view { display: none; }
+        .app-view.active { display: block; }
+
+        /* شبكة الحروف والأرقام */
+        .grid-item {
+            aspect-ratio: 1;
+            font-size: 1.4rem;
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 5px;
+        }
+        .grid-item:hover {
+            background: #3498db;
+            color: white;
+            transform: scale(1.05);
+        }
+        .grid-item span.sub-text {
+            font-size: 0.75rem;
+            font-weight: normal;
+            margin-top: 2px;
+            text-align: center;
+        }
+
+        /* تصميم البطاقات ثلاثية الأبعاد متجاوب */
+        .flashcard-container {
+            perspective: 1000px;
+            width: 100%;
+            max-width: 360px;
+            height: 230px;
+            margin: 0 auto;
+            cursor: pointer;
+        }
+        .flashcard {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            border-radius: 15px;
+        }
+        .flashcard.flipped { transform: rotateY(180deg); }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 15px;
+            background-color: white;
+            padding: 20px;
+        }
+        .card-back { background-color: #2c3e50; color: white; transform: rotateY(180deg); }
+        
+        #drawingCanvas {
+            border: 2px dashed #cbd5e1;
+            border-radius: 15px;
+            background: #fff;
+            cursor: crosshair;
+            touch-action: none;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .mic-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            font-size: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .listening {
+            background-color: #e74c3c !important;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(231, 76, 60, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+
+        /* حاوية لعبة Phaser المتجاوبة */
+        #phaser-game-container {
+            width: 100%;
+            max-width: 700px;
+            aspect-ratio: 700 / 420;
+            height: auto;
+            margin: 0 auto;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            background-color: #0f172a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #phaser-game-container canvas {
+            max-width: 100% !important;
+            max-height: 100% !important;
+            object-fit: contain;
+        }
+
+        /* أنماط قسم تركيب الجمل */
+        .sentence-dropzone {
+            min-height: 70px;
+            border: 2px dashed #94a3b8;
+            border-radius: 12px;
+            background-color: #ffffff;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px;
+            align-items: center;
+            justify-content: center;
+        }
+        .word-chip {
+            font-size: 1.1rem;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 8px;
+            background-color: #e2e8f0;
+            color: #1e293b;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        .word-chip:hover {
+            background-color: #3b82f6;
+            color: #ffffff;
+        }
+
+        /* أنماط بطاقات تشكيل الحروف والكلمات */
+        .tashkeel-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .tashkeel-card:hover {
+            transform: translateY(-3px);
+            border-color: #3b82f6;
+            box-shadow: 0 6px 15px rgba(59,130,246,0.15);
+        }
+        /* تنسيق قسم الأزرار */
+.app-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: transform 0.2s, opacity 0.2s;
+    font-family: inherit;
+}
+
+.btn:active {
+    transform: scale(0.95);
+}
+
+.install-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.share-btn {
+    background-color: #2196F3;
+    color: white;
+}
+
+/* تنسيق قسم التذييل والحقوق */
+.app-footer {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    border-radius: 12px 12px 0 0;
+    font-family: inherit;
+}
+
+.developer-rights {
+    margin-bottom: 12px;
+    color: #495057;
+    font-size: 15px;
+}
+
+.developer-rights a {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.developer-rights a:hover {
+    text-decoration: underline;
+}
+
+/* تنسيق زر GitHub */
+.github-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #24292e;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.github-link:hover {
+    background-color: #000000;
+    color: white;
+}
+    </style>
+</head>
+<body>
+
+<div class="container px-3">
+    <!-- الشريط العلوي الثابت -->
+    <div class="d-flex justify-content-between align-items-center bg-white p-3 rounded shadow-sm mb-4 flex-wrap gap-2">
+        <h4 class="m-0 text-primary fw-bold" role="button" onclick="goHome()">📚 تعلم العربية</h4>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button id="installAppBtn" class="btn btn-success btn-sm fw-bold" style="display: none;" onclick="installApp()">
+                📱 تثبيت التطبيق
+            </button>
+            <span class="badge bg-warning text-dark fs-6">⭐ النقاط: <span id="user-score">0</span></span>
+            <button class="btn btn-outline-danger btn-sm" onclick="ProgressManager.resetProgress()">إعادة ضبط</button>
+        </div>
+    </div>
+
+    <!-- ================= 1. الصفحة الرئيسية (Dashboard) ================= -->
+    <div id="view-home" class="app-view active">
+        <div class="row g-3 text-center mb-5">
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('games')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-purple">🎮</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">لعبة الكلمات (Phaser)</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('alphabet')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-primary">أ ب ت</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">الأحرف الأساسية (28)</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('letter-tashkeel')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-success">🔤</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">تشكيل الحروف</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('word-tashkeel')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-warning">📖</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">تشكيل الكلمات</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('sentence-building')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-danger">🧩</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">تركيب الجمل</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('numbers')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-dark">🔢</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">قسم الأرقام (0 - 100)</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('restaurant')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-success">🍽️</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">قسم المطعم (25)</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('speech')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-warning">🎙️</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">تدريب النطق</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('family')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-danger">👨‍👩‍👧‍👦</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">قسم العائلة (25)</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('school')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-info">🏫</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">قسم المدرسة (25)</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+    <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('home-furniture')">
+        <div class="card-body py-4">
+            <h1 class="display-4 text-primary">🏠</h1>
+            <h5 class="card-title mt-3 fs-6 fs-md-5">المنزل والأثاث (25)</h5>
+        </div>
+    </div>
+</div>
+<div class="col-6 col-md-4">
+    <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('jobs')">
+        <div class="card-body py-4">
+            <h1 class="display-4 text-success">👨‍⚕️</h1>
+            <h5 class="card-title mt-3 fs-6 fs-md-5">المهن والوظائف (25)</h5>
+        </div>
+    </div>
+</div>
+<div class="col-6 col-md-4">
+    <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('clothing')">
+        <div class="card-body py-4">
+            <h1 class="display-4 text-warning">👕</h1>
+            <h5 class="card-title mt-3 fs-6 fs-md-5">الملابس والأزياء (25)</h5>
+        </div>
+    </div>
+</div>
+<div class="col-6 col-md-4">
+    <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('weather')">
+        <div class="card-body py-4">
+            <h1 class="display-4 text-info">🌤️</h1>
+            <h5 class="card-title mt-3 fs-6 fs-md-5">الطقس والطبيعة (25)</h5>
+        </div>
+    </div>
+</div>
+<div class="col-6 col-md-4">
+    <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('transport')">
+        <div class="card-body py-4">
+            <h1 class="display-4 text-danger">🚗</h1>
+            <h5 class="card-title mt-3 fs-6 fs-md-5">المواصلات والسفر (25)</h5>
+        </div>
+    </div>
+</div>
+<div class="col-6 col-md-4">
+    <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('body')">
+        <div class="card-body py-4">
+            <h1 class="display-4 text-purple">🩺</h1>
+            <h5 class="card-title mt-3 fs-6 fs-md-5">جسم الإنسان والصحة (25)</h5>
+        </div>
+    </div>
+</div>
+<div class="col-6 col-md-4">
+    <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('colors')">
+        <div class="card-body py-4">
+            <h1 class="display-4 text-secondary">🔴</h1>
+            <h5 class="card-title mt-3 fs-6 fs-md-5">الألوان والأشكال (25)</h5>
+        </div>
+    </div>
+</div>
+<div class="col-6 col-md-4">
+    <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('time')">
+        <div class="card-body py-4">
+            <h1 class="display-4 text-dark">⏰</h1>
+            <h5 class="card-title mt-3 fs-6 fs-md-5">الوقت والزمان (25)</h5>
+        </div>
+    </div>
+</div>
+            <div class="col-6 col-md-4">
+                <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('writing')">
+                    <div class="card-body py-4">
+                        <h1 class="display-4 text-secondary">✍️</h1>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">تدريب الكتابة</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- قسم Patreon الترويجي -->
+        <div class="card border-0 shadow-sm text-white mt-5 p-4 text-center" style="background: linear-gradient(135deg, #f96854 0%, #e85d04 100%); border-radius: 15px;">
+            <h4 class="fw-bold mb-2">🎨 ادعم استمرار وتطوير المشروع</h4>
+      <p class="mb-3 small">احصل على الشيفرات المصدرية الكاملة والأصول البرمجية عبر صفحتي على GitHub.</p>
+
+            <div>
+<a href="https://www.patreon.com/haythamzeidan" target="_blank" class="btn btn-light text-dark fw-bold px-4 rounded-pill shadow-sm">⭐ انضم لدعمي على Patreon</a>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 2. قسم اللعبة المصغرة (Phaser Mini Game) ================= -->
+    <div id="view-games" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <h4 class="text-purple m-0 fw-bold">🎮 لعبة صيد بالونات المفردات</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted mb-3 small">انقر على البالون المكتوب عليه الكلمة الصحيحة المطابقة للكلمة المنطوقة!</p>
+            
+            <div id="phaser-game-container"></div>
+
+            <div class="d-flex justify-content-center gap-2 mt-3 flex-wrap">
+                <button class="btn btn-outline-primary btn-sm" onclick="restartPhaserGame()">🔄 مرحلة جديدة</button>
+                <button class="btn btn-success px-3 btn-sm" onclick="completeLesson(30)">أتممت اللعبة (+30 نقطة)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 3. قسم الأحرف الأساسية ================= -->
+    <div id="view-alphabet" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-primary m-0 fw-bold">الحروف الهجائية العربية</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted text-center small">انقر على أي حرف للاستماع إلى نطقه من الملف الصوتي المحلي:</p>
+            
+            <div class="row g-2 mt-2" id="alphabetContainer"></div>
+            <div class="text-center mt-4">
+                <button class="btn btn-success px-4" onclick="completeLesson(15)">أتممت درس الحروف (+15 نقطة)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 4. قسم تشكيل الحروف ================= -->
+    <div id="view-letter-tashkeel" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-success m-0 fw-bold">🔤 قسم تشكيل الحروف</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted small text-center">اختر حرفاً لعرض حركاته والتنوين الخاص به وسماع النطق:</p>
+            
+            <div class="d-flex justify-content-center mb-4">
+                <select id="letterSelect" class="form-select w-auto fw-bold text-primary fs-5" onchange="renderLetterTashkeel(this.value)">
+                    <!-- يتم ملء القائمة عبر JS -->
+                </select>
+            </div>
+
+            <div class="row g-3" id="tashkeelGrid"></div>
+
+            <div class="text-center mt-4">
+                <button class="btn btn-success px-4" onclick="completeLesson(20)">أتممت درس تشكيل الحروف (+20 نقطة)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 5. قسم تشكيل الكلمات ================= -->
+    <div id="view-word-tashkeel" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-warning m-0 fw-bold">📖 قسم تشكيل الكلمات</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted small text-center">انقر على الكلمة للتعرف على حركاتها وسماع الصوت:</p>
+
+            <div class="row g-3" id="wordTashkeelContainer"></div>
+
+            <div class="text-center mt-4">
+                <button class="btn btn-success px-4" onclick="completeLesson(20)">أتممت درس تشكيل الكلمات (+20 نقطة)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 6. قسم تركيب الجمل ================= -->
+    <div id="view-sentence-building" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-danger m-0 fw-bold">🧩 قسم تركيب الجمل التفاعلي</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted small">رتب الكلمات التالية لتكوين جملة مفيدة وصحيحة:</p>
+            
+            <div class="alert alert-info py-2 mb-3">
+                <strong>المعنى المطلوب:</strong> <span id="sentence-meaning">The student drinks water</span>
+            </div>
+
+            <h6 class="text-secondary mb-2">الجملة المجمعة:</h6>
+            <div class="sentence-dropzone mb-4" id="sentence-dropzone"></div>
+
+            <h6 class="text-secondary mb-2">الكلمات المتاحة:</h6>
+            <div class="d-flex justify-content-center flex-wrap gap-2 mb-4" id="sentence-pool"></div>
+
+            <div id="sentence-feedback" class="fw-bold mb-3"></div>
+
+            <div class="d-flex justify-content-center gap-2">
+                <button class="btn btn-primary" onclick="checkSentenceSolution()">تحقق من الحل 🚀</button>
+                <button class="btn btn-outline-secondary" onclick="nextSentenceRound()">الجملة التالية ➡️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 7. قسم الأرقام (0 إلى 100) ================= -->
+    <div id="view-numbers" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-dark m-0 fw-bold">🔢 الأرقام العربية (0 - 100)</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted text-center small">انقر على أي رقم للاستماع إلى نطقه من الملف الصوتي المحلي:</p>
+            
+            <div class="row g-2 mt-2" id="numbersContainer" style="max-height: 500px; overflow-y: auto;"></div>
+            <div class="text-center mt-4">
+                <button class="btn btn-success px-4" onclick="completeLesson(25)">أتممت درس الأرقام (+25 نقطة)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 8. قسم المطعم (25 كلمة) ================= -->
+    <div id="view-restaurant" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-success m-0 fw-bold">🍽️ قسم المطعم (25 كلمة)</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted mb-2 small">انقر على البطاقة لقلبها وسماع النطق الصوتي MP3:</p>
+            <div class="badge bg-secondary mb-3"><span id="rest-counter">1</span> / 25</div>
+
+            <div class="flashcard-container mb-3" onclick="toggleCard(this, restaurantData[restIndex].audio)">
+                <div class="flashcard" id="restaurantCard">
+                    <div class="card-face card-front">
+                        <span class="display-2 mb-2" id="rest-icon">🍎</span>
+                        <h3 class="text-dark" id="rest-ar">تفاحة</h3>
+                        <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                    </div>
+                    <div class="card-face card-back">
+                        <h3 class="text-warning mb-2" id="rest-en">Apple</h3>
+                        <p class="text-light small" id="rest-desc">فواكه لذيذة ومفيدة للصحة.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-center gap-2 my-3">
+                <button class="btn btn-outline-primary" onclick="prevRestaurantCard()">السابق</button>
+                <button class="btn btn-outline-primary" onclick="nextRestaurantCard()">التالي</button>
+            </div>
+
+            <div class="mt-2">
+                <button class="btn btn-success px-4" onclick="completeLesson(20)">أتممت درس المطعم (+20 نقطة)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 9. قسم تدريب النطق الصوتي ================= -->
+    <div id="view-speech" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-warning m-0 fw-bold">🎙️ اختبار النطق الصوتي</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted small">انقر على الكلمة للاستماع للملف الصوتي المحلي، ثم انقر الميكروفون وانطق الكلمة بوضوح:</p>
+            
+            <h1 class="display-4 text-primary my-2" id="target-word" role="button" onclick="playCurrentSpeechAudio()" title="انقر للاستماع للصوت">تفاحة 🔊</h1>
+            <p class="text-secondary small" id="target-word-en">Apple</p>
+
+            <div class="my-2">
+                <button id="micButton" class="btn btn-primary mic-btn shadow-sm" onclick="toggleSpeechRecognition()">🎤</button>
+            </div>
+
+            <div id="feedback-result" class="text-secondary mt-2 fw-bold">اضغط وابدأ الكلام...</div>
+
+            <div class="mt-4">
+                <button class="btn btn-outline-secondary btn-sm" onclick="nextSpeechWord()">كلمة أخرى ➡️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 10. قسم العائلة (25 كلمة) ================= -->
+    <div id="view-family" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-danger m-0 fw-bold">👨‍👩‍👧‍👦 قسم العائلة (25 كلمة)</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted mb-2 small">تعرف على أفراد العائلة باللغة العربية (انقر للقلب وسماع النطق MP3):</p>
+            <div class="badge bg-secondary mb-3"><span id="fam-counter">1</span> / 25</div>
+
+            <div class="flashcard-container mb-3" onclick="toggleCard(this, familyData[famIndex].audio)">
+                <div class="flashcard" id="familyCard">
+                    <div class="card-face card-front">
+                        <span class="display-2 mb-2" id="fam-icon">👨</span>
+                        <h3 class="text-dark" id="fam-ar">أب</h3>
+                        <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                    </div>
+                    <div class="card-face card-back">
+                        <h3 class="text-warning mb-2" id="fam-en">Father</h3>
+                        <p class="text-light small" id="fam-desc">رب الأسرة والمسؤول عنها.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-center gap-2 my-3">
+                <button class="btn btn-outline-danger" onclick="prevFamilyCard()">السابق</button>
+                <button class="btn btn-outline-danger" onclick="nextFamilyCard()">التالي</button>
+            </div>
+
+            <div class="mt-2">
+                <button class="btn btn-success px-4" onclick="completeLesson(20)">أتممت درس العائلة (+20 نقطة)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 11. قسم المدرسة (25 كلمة) ================= -->
+    <div id="view-school" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-info m-0 fw-bold">🏫 قسم المدرسة (25 كلمة)</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted mb-2 small">تعرف على الأدوات المدرسية باللغة العربية (انقر للقلب وسماع النطق MP3):</p>
+            <div class="badge bg-secondary mb-3"><span id="sch-counter">1</span> / 25</div>
+
+            <div class="flashcard-container mb-3" onclick="toggleCard(this, schoolData[schIndex].audio)">
+                <div class="flashcard" id="schoolCard">
+                    <div class="card-face card-front">
+                        <span class="display-2 mb-2" id="sch-icon">📚</span>
+                        <h3 class="text-dark" id="sch-ar">كتاب</h3>
+                        <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                    </div>
+                    <div class="card-face card-back">
+                        <h3 class="text-warning mb-2" id="sch-en">Book</h3>
+                        <p class="text-light small" id="sch-desc">أداة للقراءة والتعلم والمعرفة.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-center gap-2 my-3">
+                <button class="btn btn-outline-info" onclick="prevSchoolCard()">السابق</button>
+                <button class="btn btn-outline-info" onclick="nextSchoolCard()">التالي</button>
+            </div>
+
+            <div class="mt-2">
+                <button class="btn btn-success px-4" onclick="completeLesson(20)">أتممت درس المدرسة (+20 نقطة)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 12. قسم التدريب على الكتابة ================= -->
+    <div id="view-writing" class="app-view">
+        <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-secondary m-0 fw-bold">✍️ التدريب على الكتابة</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+            </div>
+            <p class="text-muted small">استخدم إصبعك أو الفأرة للتدرب على رسم الحروف والأرقام داخل اللوحة أدناه:</p>
+
+            <div class="d-flex justify-content-center my-3">
+                <canvas id="drawingCanvas" width="320" height="200"></canvas>
+            </div>
+
+            <div class="d-flex justify-content-center gap-2">
+                <button class="btn btn-outline-danger btn-sm" onclick="clearCanvas()">مسح اللوحة</button>
+                <button class="btn btn-success btn-sm" onclick="completeLesson(15)">أتممت تمرين الكتابة (+15 نقطة)</button>
+            </div>
+        </div>
+    </div>
+<!-- 1. قسم المنزل والأثاث -->
+<div id="view-home-furniture" class="app-view">
+    <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-primary m-0 fw-bold">🏠 قسم المنزل والأثاث (25 كلمة)</h4>
+            <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+        </div>
+        <div class="badge bg-secondary mb-3"><span id="homeFurn-counter">1</span> / 25</div>
+        <div class="flashcard-container mb-3" onclick="toggleCard(this, homeFurnData[homeFurnIndex].audio)">
+            <div class="flashcard" id="homeFurnCard">
+                <div class="card-face card-front">
+                    <span class="display-2 mb-2" id="hf-icon">🏠</span>
+                    <h3 class="text-dark" id="hf-ar">منزل</h3>
+                    <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                </div>
+                <div class="card-face card-back">
+                    <h3 class="text-warning mb-2" id="hf-en">House</h3>
+                    <p class="text-light small" id="hf-desc">المكان الذي نعيش فيه مع العائلة.</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex justify-content-center gap-2 my-3">
+            <button class="btn btn-outline-primary" onclick="prevHomeFurnCard()">السابق</button>
+            <button class="btn btn-outline-primary" onclick="nextHomeFurnCard()">التالي</button>
+        </div>
+        <button class="btn btn-success px-4 mt-2" onclick="completeLesson(20)">أتممت القسم (+20 نقطة)</button>
+    </div>
+</div>
+
+<!-- 2. قسم المهن والوظائف -->
+<div id="view-jobs" class="app-view">
+    <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-success m-0 fw-bold">👨‍⚕️ قسم المهن والوظائف (25 كلمة)</h4>
+            <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+        </div>
+        <div class="badge bg-secondary mb-3"><span id="jobs-counter">1</span> / 25</div>
+        <div class="flashcard-container mb-3" onclick="toggleCard(this, jobsData[jobsIndex].audio)">
+            <div class="flashcard" id="jobsCard">
+                <div class="card-face card-front">
+                    <span class="display-2 mb-2" id="job-icon">👨‍⚕️</span>
+                    <h3 class="text-dark" id="job-ar">طبيب</h3>
+                    <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                </div>
+                <div class="card-face card-back">
+                    <h3 class="text-warning mb-2" id="job-en">Doctor</h3>
+                    <p class="text-light small" id="job-desc">يعالج المرضى ويصف الدواء.</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex justify-content-center gap-2 my-3">
+            <button class="btn btn-outline-success" onclick="prevJobCard()">السابق</button>
+            <button class="btn btn-outline-success" onclick="nextJobCard()">التالي</button>
+        </div>
+        <button class="btn btn-success px-4 mt-2" onclick="completeLesson(20)">أتممت القسم (+20 نقطة)</button>
+    </div>
+</div>
+
+<!-- 3. قسم الملابس والأزياء -->
+<div id="view-clothing" class="app-view">
+    <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-warning m-0 fw-bold">👕 قسم الملابس والأزياء (25 كلمة)</h4>
+            <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+        </div>
+        <div class="badge bg-secondary mb-3"><span id="cloth-counter">1</span> / 25</div>
+        <div class="flashcard-container mb-3" onclick="toggleCard(this, clothingData[clothIndex].audio)">
+            <div class="flashcard" id="clothingCard">
+                <div class="card-face card-front">
+                    <span class="display-2 mb-2" id="cl-icon">👕</span>
+                    <h3 class="text-dark" id="cl-ar">قميص</h3>
+                    <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                </div>
+                <div class="card-face card-back">
+                    <h3 class="text-warning mb-2" id="cl-en">Shirt</h3>
+                    <p class="text-light small" id="cl-desc">من ملابس النصف العلوي للجسم.</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex justify-content-center gap-2 my-3">
+            <button class="btn btn-outline-warning" onclick="prevClothingCard()">السابق</button>
+            <button class="btn btn-outline-warning" onclick="nextClothingCard()">التالي</button>
+        </div>
+        <button class="btn btn-success px-4 mt-2" onclick="completeLesson(20)">أتممت القسم (+20 نقطة)</button>
+    </div>
+</div>
+
+<!-- 4. قسم الطقس والطبيعة -->
+<div id="view-weather" class="app-view">
+    <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-info m-0 fw-bold">🌤️ قسم الطقس والطبيعة (25 كلمة)</h4>
+            <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+        </div>
+        <div class="badge bg-secondary mb-3"><span id="weather-counter">1</span> / 25</div>
+        <div class="flashcard-container mb-3" onclick="toggleCard(this, weatherData[weatherIndex].audio)">
+            <div class="flashcard" id="weatherCard">
+                <div class="card-face card-front">
+                    <span class="display-2 mb-2" id="we-icon">☀️</span>
+                    <h3 class="text-dark" id="we-ar">شمس</h3>
+                    <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                </div>
+                <div class="card-face card-back">
+                    <h3 class="text-warning mb-2" id="we-en">Sun</h3>
+                    <p class="text-light small" id="we-desc">النجم الأساسي الذي يضيء الكون.</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex justify-content-center gap-2 my-3">
+            <button class="btn btn-outline-info" onclick="prevWeatherCard()">السابق</button>
+            <button class="btn btn-outline-info" onclick="nextWeatherCard()">التالي</button>
+        </div>
+        <button class="btn btn-success px-4 mt-2" onclick="completeLesson(20)">أتممت القسم (+20 نقطة)</button>
+    </div>
+</div>
+
+<!-- 5. قسم وسائل المواصلات والسفر -->
+<div id="view-transport" class="app-view">
+    <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-danger m-0 fw-bold">🚗 قسم المواصلات والسفر (25 كلمة)</h4>
+            <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+        </div>
+        <div class="badge bg-secondary mb-3"><span id="trans-counter">1</span> / 25</div>
+        <div class="flashcard-container mb-3" onclick="toggleCard(this, transportData[transIndex].audio)">
+            <div class="flashcard" id="transportCard">
+                <div class="card-face card-front">
+                    <span class="display-2 mb-2" id="tr-icon">🚗</span>
+                    <h3 class="text-dark" id="tr-ar">سيارة</h3>
+                    <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                </div>
+                <div class="card-face card-back">
+                    <h3 class="text-warning mb-2" id="tr-en">Car</h3>
+                    <p class="text-light small" id="tr-desc">مركبة برية تسير على عجلات.</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex justify-content-center gap-2 my-3">
+            <button class="btn btn-outline-danger" onclick="prevTransportCard()">السابق</button>
+            <button class="btn btn-outline-danger" onclick="nextTransportCard()">التالي</button>
+        </div>
+        <button class="btn btn-success px-4 mt-2" onclick="completeLesson(20)">أتممت القسم (+20 نقطة)</button>
+    </div>
+</div>
+
+<!-- 6. قسم جسم الإنسان والصحة -->
+<div id="view-body" class="app-view">
+    <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-purple m-0 fw-bold">🩺 جسم الإنسان والصحة (25 كلمة)</h4>
+            <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+        </div>
+        <div class="badge bg-secondary mb-3"><span id="body-counter">1</span> / 25</div>
+        <div class="flashcard-container mb-3" onclick="toggleCard(this, bodyData[bodyIndex].audio)">
+            <div class="flashcard" id="bodyCard">
+                <div class="card-face card-front">
+                    <span class="display-2 mb-2" id="bo-icon">🧠</span>
+                    <h3 class="text-dark" id="bo-ar">رأس</h3>
+                    <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                </div>
+                <div class="card-face card-back">
+                    <h3 class="text-warning mb-2" id="bo-en">Head</h3>
+                    <p class="text-light small" id="bo-desc, bo-desc">يحتوي على الدماغ وأعضاء الحواس.</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex justify-content-center gap-2 my-3">
+            <button class="btn btn-outline-secondary" onclick="prevBodyCard()">السابق</button>
+            <button class="btn btn-outline-secondary" onclick="nextBodyCard()">التالي</button>
+        </div>
+        <button class="btn btn-success px-4 mt-2" onclick="completeLesson(20)">أتممت القسم (+20 نقطة)</button>
+    </div>
+</div>
+
+<!-- 7. قسم الألوان والأشكال والاتجاهات -->
+<div id="view-colors" class="app-view">
+    <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-secondary m-0 fw-bold">🔴 الألوان والأشكال (25 كلمة)</h4>
+            <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+        </div>
+        <div class="badge bg-secondary mb-3"><span id="col-counter">1</span> / 25</div>
+        <div class="flashcard-container mb-3" onclick="toggleCard(this, colorsData[colIndex].audio)">
+            <div class="flashcard" id="colorsCard">
+                <div class="card-face card-front">
+                    <span class="display-2 mb-2" id="co-icon">🔴</span>
+                    <h3 class="text-dark" id="co-ar">أحمر</h3>
+                    <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                </div>
+                <div class="card-face card-back">
+                    <h3 class="text-warning mb-2" id="co-en">Red</h3>
+                    <p class="text-light small" id="co-desc">من الألوان الأساسية الزاهية.</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex justify-content-center gap-2 my-3">
+            <button class="btn btn-outline-secondary" onclick="prevColorCard()">السابق</button>
+            <button class="btn btn-outline-secondary" onclick="nextColorCard()">التالي</button>
+        </div>
+        <button class="btn btn-success px-4 mt-2" onclick="completeLesson(20)">أتممت القسم (+20 نقطة)</button>
+    </div>
+</div>
+
+<!-- 8. قسم الوقت والزمان -->
+<div id="view-time" class="app-view">
+    <div class="card shadow-sm border-0 p-3 p-md-4 text-center">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="text-dark m-0 fw-bold">⏰ قسم الوقت والزمان (25 كلمة)</h4>
+            <button class="btn btn-outline-secondary btn-sm" onclick="goHome()">⬅️ الرئيسية</button>
+        </div>
+        <div class="badge bg-secondary mb-3"><span id="time-counter">1</span> / 25</div>
+        <div class="flashcard-container mb-3" onclick="toggleCard(this, timeData[timeIndex].audio)">
+            <div class="flashcard" id="timeCard">
+                <div class="card-face card-front">
+                    <span class="display-2 mb-2" id="ti-icon">🌅</span>
+                    <h3 class="text-dark" id="ti-ar">صباح</h3>
+                    <span class="text-muted small mt-1">(انقر للقلب وسماع الصوت 🔊)</span>
+                </div>
+                <div class="card-face card-back">
+                    <h3 class="text-warning mb-2" id="ti-en">Morning</h3>
+                    <p class="text-light small" id="ti-desc">بداية النهار وفترة شروق الشمس.</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex justify-content-center gap-2 my-3">
+            <button class="btn btn-outline-dark" onclick="prevTimeCard()">السابق</button>
+            <button class="btn btn-outline-dark" onclick="nextTimeCard()">التالي</button>
+        </div>
+        <button class="btn btn-success px-4 mt-2" onclick="completeLesson(20)">أتممت القسم (+20 نقطة)</button>
+    </div>
+</div>
+</div>
+
+<!-- مكتبة Howler.js لإدارة الصوتيات المحلية -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
+
+<script>
+    const RENDER_API_URL = "https://arabic-learning-zdfg.onrender.com";
+
+    // --- مدير الصوت المحلي عبر Howler.js ---
+    const SoundManager = {
+        activeSound: null,
+        play(audioPath) {
+            if (!audioPath) return;
+            if (this.activeSound) {
+                this.activeSound.stop();
+            }
+            this.activeSound = new Howl({
+                src: [audioPath],
+                html5: true,
+                onloaderror: (id, err) => console.warn(`تعذر تحميل الملف الصوتي: ${audioPath}`),
+                onplayerror: (id, err) => {
+                    this.activeSound.once('unlock', () => {
+                        this.activeSound.play();
+                    });
+                }
+            });
+            this.activeSound.play();
+        }
+    };
+
+    function playAudio(path) {
+        SoundManager.play(path);
+    }
+
+    // --- نظام التنقل بين الأقسام ---
+    function setActiveSection(sectionName) {
+        document.querySelectorAll('.app-view').forEach(view => {
+            view.classList.remove('active');
+        });
+        const targetView = document.getElementById(`view-${sectionName}`);
+        if (targetView) {
+            targetView.classList.add('active');
+        }
+        if (sectionName === 'games') {
+            initPhaserGame();
+        } else if (sectionName === 'letter-tashkeel') {
+            initLetterTashkeel();
+        } else if (sectionName === 'word-tashkeel') {
+            initWordTashkeel();
+        } else if (sectionName === 'sentence-building') {
+            initSentenceBuilding();
+        }
+    }
+
+    function goHome() {
+        setActiveSection('home');
+    }
+
+    // --- 1. إدارة التقدم و LocalStorage ---
+    const ProgressManager = {
+        userId: null,
+        init() {
+            let userId = localStorage.getItem('arabic_app_user_id');
+            if (!userId) {
+                userId = 'user_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('arabic_app_user_id', userId);
+            }
+            this.userId = userId;
+
+            if (!localStorage.getItem('arabic_app_progress')) {
+                const initialData = { score: 0 };
+                localStorage.setItem('arabic_app_progress', JSON.stringify(initialData));
+            }
+            this.updateUI();
+            this.fetchCloudScore();
+        },
+        getData() {
+            return JSON.parse(localStorage.getItem('arabic_app_progress'));
+        },
+        saveData(data) {
+            localStorage.setItem('arabic_app_progress', JSON.stringify(data));
+        },
+        addPoints(amount) {
+            let data = this.getData();
+            data.score += amount;
+            this.saveData(data);
+            this.updateUI();
+            this.syncToCloud(data.score);
+        },
+        async syncToCloud(score) {
+            try {
+                await fetch(`${RENDER_API_URL}/save-score`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: this.userId, score })
+                });
+            } catch (error) {
+                console.log("وضع غير متصل (Offline): تم الحفظ محلياً فقط");
+            }
+        },
+        async fetchCloudScore() {
+            try {
+                const response = await fetch(`${RENDER_API_URL}/score/${this.userId}`);
+                const result = await response.json();
+                if (result.success && result.score !== undefined) {
+                    let data = this.getData();
+                    if (result.score > data.score) {
+                        data.score = result.score;
+                        this.saveData(data);
+                        this.updateUI();
+                    }
+                }
+            } catch (error) {
+                console.log("تعذر الاتصال بالسيرفر السحابي.");
+            }
+        },
+        updateUI() {
+            const data = this.getData();
+            const scoreEl = document.getElementById('user-score');
+            if(scoreEl) scoreEl.innerText = data.score;
+        },
+        resetProgress() {
+            localStorage.removeItem('arabic_app_progress');
+            this.init();
+            alert('تمت إعادة ضبط التقدم بنجاح.');
+        }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+        ProgressManager.init();
+        initAlphabetGrid();
+        initNumbersGrid();
+        initCanvas();
+    });
+
+    function completeLesson(pts) {
+        ProgressManager.addPoints(pts);
+        alert(`أحسنت! تمت إضافة ${pts} نقطة بنجاح 🎉`);
+        goHome();
+    }
+
+    // --- 2. قسم تشكيل الحروف (إضافة جميع الحروف برمجياً) ---
+    const allLettersConfig = [
+        { char: 'أ', name: 'alif' }, { char: 'ب', name: 'ba' }, { char: 'ت', name: 'ta' }, { char: 'ث', name: 'tha' },
+        { char: 'ج', name: 'jeem' }, { char: 'ح', name: 'ha' }, { char: 'خ', name: 'kha' }, { char: 'د', name: 'dal' },
+        { char: 'ذ', name: 'dhal' }, { char: 'ر', name: 'ra' }, { char: 'ز', name: 'zay' }, { char: 'س', name: 'seen' },
+        { char: 'ش', name: 'sheen' }, { char: 'ص', name: 'sad' }, { char: 'ض', name: 'dad' }, { char: 'ط', name: 'taa' },
+        { char: 'ظ', name: 'zaa' }, { char: 'ع', name: 'ain' }, { char: 'غ', name: 'ghain' }, { char: 'ف', name: 'fa' },
+        { char: 'ق', name: 'qaf' }, { char: 'ك', name: 'kaf' }, { char: 'ل', name: 'lam' }, { char: 'م', name: 'meem' },
+        { char: 'ن', name: 'noon' }, { char: 'ه', name: 'haa' }, { char: 'و', name: 'waw' }, { char: 'ي', name: 'yaa' }
+    ];
+
+    const letterTashkeelData = {};
+    allLettersConfig.forEach(l => {
+        letterTashkeelData[l.char] = [
+            { label: 'فتحة', text: l.char + 'َ', audio: `audio/tashkeel/${l.name}_fatha.mp3` },
+            { label: 'ضمة', text: l.char + 'ُ', audio: `audio/tashkeel/${l.name}_damma.mp3` },
+            { label: 'كسرة', text: l.char + 'ِ', audio: `audio/tashkeel/${l.name}_kasra.mp3` },
+            { label: 'سكون', text: l.char + 'ْ', audio: `audio/tashkeel/${l.name}_sukun.mp3` },
+            { label: 'تنوين فتح', text: l.char + 'ً', audio: `audio/tashkeel/${l.name}_tanwin_fath.mp3` },
+            { label: 'تنوين ضم', text: l.char + 'ٌ', audio: `audio/tashkeel/${l.name}_tanwin_dam.mp3` },
+            { label: 'تنوين كسر', text: l.char + 'ٍ', audio: `audio/tashkeel/${l.name}_tanwin_kasr.mp3` }
+        ];
+    });
+
+    function initLetterTashkeel() {
+        const select = document.getElementById('letterSelect');
+        if (!select) return;
+        select.innerHTML = '';
+        Object.keys(letterTashkeelData).forEach(lettr => {
+            const opt = document.createElement('option');
+            opt.value = lettr;
+            opt.innerText = `حرف (${lettr})`;
+            select.appendChild(opt);
+        });
+        renderLetterTashkeel(select.value || 'أ');
+    }
+
+    function renderLetterTashkeel(letter) {
+        const grid = document.getElementById('tashkeelGrid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        const items = letterTashkeelData[letter] || [];
+        items.forEach(item => {
+            const col = document.createElement('div');
+            col.className = 'col-6 col-md-3';
+            col.innerHTML = `
+                <div class="tashkeel-card" onclick="playAudio('${item.audio}')">
+                    <span class="badge bg-primary mb-2">${item.label}</span>
+                    <h1 class="display-3 text-dark fw-bold m-0">${item.text}</h1>
+                    <small class="text-muted">انقر للاستماع 🔊</small>
+                </div>`;
+            grid.appendChild(col);
+        });
+    }
+
+    // --- 3. قسم تشكيل الكلمات (إضافة جميع الكلمات المُشكلة) ---
+    const wordTashkeelList = [
+        {
+            group: 'تغير المعنى بتغير التشكيل (ك-ت-ب)',
+            items: [
+                { word: 'كَتَبَ', meaning: 'فعل: قام بالكتابة (He wrote)', audio: 'audio/words/kataba.mp3' },
+                { word: 'كُتُبٌ', meaning: 'اسم: جمع كتاب (Books)', audio: 'audio/words/kutubun.mp3' },
+                { word: 'كِتَابٌ', meaning: 'اسم: كتاب واحد (A book)', audio: 'audio/words/kitabun.mp3' }
+            ]
+        },
+        {
+            group: 'تغير المعنى بتغير التشكيل (ع-ل-م)',
+            items: [
+                { word: 'عَلِمَ', meaning: 'فعل: عرف الشيء (He knew)', audio: 'audio/words/alima.mp3' },
+                { word: 'عُلِمَ', meaning: 'فعل مبني للمجهول (It was known)', audio: 'audio/words/ulima.mp3' },
+                { word: 'عِلْمٌ', meaning: 'اسم: المعرفة والدراسة (Knowledge)', audio: 'audio/words/ilmun.mp3' }
+            ]
+        },
+        {
+            group: 'كلمات المطعم (مُشَكَّلَة)',
+            items: [
+                { word: 'تُفَّاحَةٌ', meaning: 'Apple', audio: 'audio/words/apple.mp3' }, { word: 'مَاءٌ', meaning: 'Water', audio: 'audio/words/water.mp3' }, { word: 'خُبْزٌ', meaning: 'Bread', audio: 'audio/words/bread.mp3' },
+                { word: 'حَلِيبٌ', meaning: 'Milk', audio: 'audio/words/milk.mp3' }, { word: 'قَهْوَةٌ', meaning: 'Coffee', audio: 'audio/words/coffee.mp3' }, { word: 'شَايٌ', meaning: 'Tea', audio: 'audio/words/tea.mp3' },
+                { word: 'عَصِيرٌ', meaning: 'Juice', audio: 'audio/words/juice.mp3' }, { word: 'طَعَامٌ', meaning: 'Food', audio: 'audio/words/food.mp3' }, { word: 'لَحْمٌ', meaning: 'Meat', audio: 'audio/words/meat.mp3' },
+                { word: 'دَجَاجٌ', meaning: 'Chicken', audio: 'audio/words/chicken.mp3' }, { word: 'سَمَكٌ', meaning: 'Fish', audio: 'audio/words/fish.mp3' }, { word: 'أَرُزٌّ', meaning: 'Rice', audio: 'audio/words/rice.mp3' },
+                { word: 'حَسَاءٌ', meaning: 'Soup', audio: 'audio/words/soup.mp3' }, { word: 'سَلَطَةٌ', meaning: 'Salad', audio: 'audio/words/salad.mp3' }, { word: 'جُبْنٌ', meaning: 'Cheese', audio: 'audio/words/cheese.mp3' },
+                { word: 'بَيْضٌ', meaning: 'Egg', audio: 'audio/words/egg.mp3' }, { word: 'فَاكِهَةٌ', meaning: 'Fruit', audio: 'audio/words/fruit.mp3' }, { word: 'خُضَارٌ', meaning: 'Vegetables', audio: 'audio/words/vegetables.mp3' },
+                { word: 'حَلْوَى', meaning: 'Sweets', audio: 'audio/words/sweets.mp3' }, { word: 'مِلْحٌ', meaning: 'Salt', audio: 'audio/words/salt.mp3' }, { word: 'سُكَّرٌ', meaning: 'Sugar', audio: 'audio/words/sugar.mp3' },
+                { word: 'مَطْعَمٌ', meaning: 'Restaurant', audio: 'audio/words/restaurant.mp3' }, { word: 'قَائِمَةٌ', meaning: 'Menu', audio: 'audio/words/menu.mp3' }, { word: 'فَاتُورَةٌ', meaning: 'Bill', audio: 'audio/words/bill.mp3' },
+                { word: 'مِلْعَقَةٌ', meaning: 'Spoon', audio: 'audio/words/spoon.mp3' }
+            ]
+        },
+        {
+            group: 'كلمات العائلة (مُشَكَّلَة)',
+            items: [
+                { word: 'أَبٌ', meaning: 'Father', audio: 'audio/words/father.mp3' }, { word: 'أُمٌّ', meaning: 'Mother', audio: 'audio/words/mother.mp3' }, { word: 'أَخٌ', meaning: 'Brother', audio: 'audio/words/brother.mp3' },
+                { word: 'أُخْتٌ', meaning: 'Sister', audio: 'audio/words/sister.mp3' }, { word: 'جَدٌّ', meaning: 'Grandfather', audio: 'audio/words/grandfather.mp3' }, { word: 'جَدَّةٌ', meaning: 'Grandmother', audio: 'audio/words/grandmother.mp3' },
+                { word: 'اِبْنٌ', meaning: 'Son', audio: 'audio/words/son.mp3' }, { word: 'اِبْنَةٌ', meaning: 'Daughter', audio: 'audio/words/daughter.mp3' }, { word: 'عَمٌّ', meaning: 'Paternal Uncle', audio: 'audio/words/paternal_uncle.mp3' },
+                { word: 'عَمَّةٌ', meaning: 'Paternal Aunt', audio: 'audio/words/paternal_aunt.mp3' }, { word: 'خَالٌ', meaning: 'Maternal Uncle', audio: 'audio/words/maternal_uncle.mp3' }, { word: 'خَالَةٌ', meaning: 'Maternal Aunt', audio: 'audio/words/maternal_aunt.mp3' },
+                { word: 'عَائِلَةٌ', meaning: 'Family', audio: 'audio/words/family.mp3' }, { word: 'زَوْجٌ', meaning: 'Husband', audio: 'audio/words/husband.mp3' }, { word: 'زَوْجَةٌ', meaning: 'Wife', audio: 'audio/words/wife.mp3' },
+                { word: 'طِفْلٌ', meaning: 'Child', audio: 'audio/words/child.mp3' }, { word: 'رَضِيعٌ', meaning: 'Baby', audio: 'audio/words/baby.mp3' }, { word: 'حَفِيدٌ', meaning: 'Grandson', audio: 'audio/words/grandson.mp3' },
+                { word: 'حَفِيدَةٌ', meaning: 'Granddaughter', audio: 'audio/words/granddaughter.mp3' }, { word: 'صِهْرٌ', meaning: 'In-law', audio: 'audio/words/in_law.mp3' }, { word: 'قَرِيبٌ', meaning: 'Relative', audio: 'audio/words/relative.mp3' },
+                { word: 'وَالِدَيْنِ', meaning: 'Parents', audio: 'audio/words/parents.mp3' }, { word: 'أَجْدَادٌ', meaning: 'Grandparents', audio: 'audio/words/grandparents.mp3' }, { word: 'أَطْفَالٌ', meaning: 'Children', audio: 'audio/words/children.mp3' },
+                { word: 'مَنْزِلٌ', meaning: 'Home', audio: 'audio/words/home.mp3' }
+            ]
+        },
+        {
+            group: 'كلمات المدرسة (مُشَكَّلَة)',
+            items: [
+                { word: 'كِتَابٌ', meaning: 'Book', audio: 'audio/words/book.mp3' }, { word: 'قَلَمٌ', meaning: 'Pencil', audio: 'audio/words/pencil.mp3' }, { word: 'دَفْتَرٌ', meaning: 'Notebook', audio: 'audio/words/notebook.mp3' },
+                { word: 'مَدْرَسَةٌ', meaning: 'School', audio: 'audio/words/school.mp3' }, { word: 'مُعَلِّمٌ', meaning: 'Teacher', audio: 'audio/words/teacher.mp3' }, { word: 'طَالِبٌ', meaning: 'Student', audio: 'audio/words/student.mp3' },
+                { word: 'صَفٌّ', meaning: 'Classroom', audio: 'audio/words/classroom.mp3' }, { word: 'حَقِيبَةٌ', meaning: 'Bag', audio: 'audio/words/bag.mp3' }, { word: 'مِمْحَاةٌ', meaning: 'Eraser', audio: 'audio/words/eraser.mp3' },
+                { word: 'مِسْطَرَةٌ', meaning: 'Ruler', audio: 'audio/words/ruler.mp3' }, { word: 'طَاوِلَةٌ', meaning: 'Desk', audio: 'audio/words/desk.mp3' }, { word: 'سَبُّورَةٌ', meaning: 'Blackboard', audio: 'audio/words/blackboard.mp3' },
+                { word: 'حَاسُوبٌ', meaning: 'Computer', audio: 'audio/words/computer.mp3' }, { word: 'مِقَصٌّ', meaning: 'Scissors', audio: 'audio/words/scissors.mp3' }, { word: 'وَرَقَةٌ', meaning: 'Paper', audio: 'audio/words/paper.mp3' },
+                { word: 'أَلْوَانٌ', meaning: 'Colors', audio: 'audio/words/colors.mp3' }, { word: 'خَرِيطَةٌ', meaning: 'Map', audio: 'audio/words/map.mp3' }, { word: 'اِمْتِحَانٌ', meaning: 'Exam', audio: 'audio/words/exam.mp3' },
+                { word: 'مَكْتَبَةٌ', meaning: 'Library', audio: 'audio/words/library.mp3' }, { word: 'وَاجِبٌ', meaning: 'Homework', audio: 'audio/words/homework.mp3' }, { word: 'دَرْسٌ', meaning: 'Lesson', audio: 'audio/words/lesson.mp3' },
+                { word: 'قَلَمُ حِبْرٍ', meaning: 'Ink Pen', audio: 'audio/words/ink_pen.mp3' }, { word: 'مُخْتَبَرٌ', meaning: 'Laboratory', audio: 'audio/words/lab.mp3' }, { word: 'حَافِلَةٌ', meaning: 'Bus', audio: 'audio/words/bus.mp3' },
+                { word: 'شَهَادَةٌ', meaning: 'Certificate', audio: 'audio/words/certificate.mp3' }
+            ]
+        }
+    ];
+
+    function initWordTashkeel() {
+        const container = document.getElementById('wordTashkeelContainer');
+        if (!container) return;
+        container.innerHTML = '';
+
+        wordTashkeelList.forEach(groupObj => {
+            const groupHeader = document.createElement('div');
+            groupHeader.className = 'col-12 mt-3';
+            groupHeader.innerHTML = `<h5 class="fw-bold text-secondary border-bottom pb-2">${groupObj.group}</h5>`;
+            container.appendChild(groupHeader);
+
+            groupObj.items.forEach(item => {
+                const col = document.createElement('div');
+                col.className = 'col-6 col-md-4';
+                col.innerHTML = `
+                    <div class="tashkeel-card" onclick="playAudio('${item.audio}')">
+                        <h2 class="text-primary fw-bold mb-2">${item.word}</h2>
+                        <p class="text-dark mb-1 small">${item.meaning}</p>
+                        <small class="text-muted">🔊 اضغط للنطق الصوت</small>
+                    </div>`;
+                container.appendChild(col);
+            });
+        });
+    }
+
+    // --- 4. قسم تركيب الجمل (25 جملة متنوعة) ---
+    const sentenceList = [
+        { meaning: 'يشرب الطالب الماء', en: 'The student drinks water', correctOrder: ['يَشْرَبُ', 'الطَّالِبُ', 'الْمَاءَ'], audio: 'audio/sentences/sentence_1.mp3' },
+        { meaning: 'يقرأ الطفل الكتاب', en: 'The child reads the book', correctOrder: ['يَقْرَأُ', 'الطِّفْلُ', 'الْكِتَابَ'], audio: 'audio/sentences/sentence_2.mp3' },
+        { meaning: 'تأكل الأم التفاحة', en: 'The mother eats the apple', correctOrder: ['تَأْكُلُ', 'الْأُمُّ', 'التُّفَّاحَةَ'], audio: 'audio/sentences/sentence_3.mp3' },
+        { meaning: 'يذهب الأب إلى المطعم', en: 'The father goes to the restaurant', correctOrder: ['يَذْهَبُ', 'الْأَبُ', 'إِلَى', 'الْمَطْعَمِ'], audio: 'audio/sentences/sentence_4.mp3' },
+        { meaning: 'يكتب المعلم على السبورة', en: 'The teacher writes on the blackboard', correctOrder: ['يَكْتُبُ', 'الْمُعَلِّمُ', 'عَلَى', 'السَّبُّورَةِ'], audio: 'audio/sentences/sentence_5.mp3' },
+        { meaning: 'تجلس البنت على الطاولة', en: 'The girl sits on the table', correctOrder: ['تَجْلِسُ', 'الْبِنْتُ', 'عَلَى', 'الطَّاوِلَةِ'], audio: 'audio/sentences/sentence_6.mp3' },
+        { meaning: 'يحب الجد شرب القهوة', en: 'The grandfather likes drinking coffee', correctOrder: ['يُحِبُّ', 'الْجَدُّ', 'شُرْبَ', 'الْقَهْوَةِ'], audio: 'audio/sentences/sentence_7.mp3' },
+        { meaning: 'تشتري الأخت الخبز والحليب', en: 'The sister buys bread and milk', correctOrder: ['تَشْتَرِي', 'الْأُخْتُ', 'الْخُبْزَ', 'وَالْحَلِيبَ'], audio: 'audio/sentences/sentence_8.mp3' },
+        { meaning: 'يلعب الولد في المدرسة', en: 'The boy plays in the school', correctOrder: ['يَلْعَبُ', 'الْوَلَدُ', 'فِي', 'الْمَدْرَسَةِ'], audio: 'audio/sentences/sentence_9.mp3' },
+        { meaning: 'تقرأ الجدة قصة للحفيد', en: 'The grandmother reads a story to the grandson', correctOrder: ['تَقْرَأُ', 'الْجَدَّةُ', 'قِصَّةً', 'لِلْحَفِيدِ'], audio: 'audio/sentences/sentence_10.mp3' },
+        { meaning: 'الطعام لذيذ في هذا المطعم', en: 'The food is delicious in this restaurant', correctOrder: ['الطَّعَامُ', 'لَذِيذٌ', 'فِي', 'هَذَا', 'الْمَطْعَمِ'], audio: 'audio/sentences/sentence_11.mp3' },
+        { meaning: 'يحمل الطالب الحقيبة المدرسية', en: 'The student carries the school bag', correctOrder: ['يَحْمِلُ', 'الطَّالِبُ', 'الْحَقِيبَةَ', 'الْمَدْرَسِيَّةَ'], audio: 'audio/sentences/sentence_12.mp3' },
+        { meaning: 'العائلة تتناول طعام الغداء', en: 'The family is having lunch', correctOrder: ['الْعَائِلَةُ', 'تَتَنَاوَلُ', 'طَعَامَ', 'الْغَدَاءِ'], audio: 'audio/sentences/sentence_13.mp3' },
+        { meaning: 'الأخ يرسم بالألوان', en: 'The brother draws with colors', correctOrder: ['الْأَخُ', 'يَرْسُمُ', 'بِالْأَلْوَانِ'], audio: 'audio/sentences/sentence_14.mp3' },
+        { meaning: 'تشرب العائلة العصير الطازج', en: 'The family drinks fresh juice', correctOrder: ['تَشْرَبُ', 'الْعَائِلَةُ', 'الْعَصِيرَ', 'الطَّازَجَ'], audio: 'audio/sentences/sentence_15.mp3' },
+        { meaning: 'المعلم يشرح الدرس للأطفال', en: 'The teacher explains the lesson to the children', correctOrder: ['الْمُعَلِّمُ', 'يَشْرَحُ', 'الدَّرْسَ', 'لِلْأَطْفَالِ'], audio: 'audio/sentences/sentence_16.mp3' },
+        { meaning: 'الزوج يطلب الفاتورة', en: 'The husband asks for the bill', correctOrder: ['الزَّوْجُ', 'يَطْلُبُ', 'الْفَاتُورَةَ'], audio: 'audio/sentences/sentence_17.mp3' },
+        { meaning: 'نحن نحب أكل السمك', en: 'We love eating fish', correctOrder: ['نَحْنُ', 'نُحِبُّ', 'أَكْلَ', 'السَّمَكِ'], audio: 'audio/sentences/sentence_18.mp3' },
+        { meaning: 'هذه خريطة العالم', en: 'This is the map of the world', correctOrder: ['هَذِهِ', 'خَرِيطَةُ', 'الْعَالَمِ'], audio: 'audio/sentences/sentence_19.mp3' },
+        { meaning: 'الطالب يكتب الواجب بالقلم', en: 'The student writes the homework with the pen', correctOrder: ['الطَّالِبُ', 'يَكْتُبُ', 'الْوَاجِبَ', 'بِالْقَلَمِ'], audio: 'audio/sentences/sentence_20.mp3' },
+        { meaning: 'الأم تحضر الحساء الساخن', en: 'The mother prepares the hot soup', correctOrder: ['الْأُمُّ', 'تُحَضِّرُ', 'الْحَسَاءَ', 'السَّاخِنَ'], audio: 'audio/sentences/sentence_21.mp3' },
+        { meaning: 'الطفل يقص الورقة بالمقص', en: 'The child cuts the paper with scissors', correctOrder: ['الطِّفْلُ', 'يَقُصُّ', 'الْوَرَقَةَ', 'بِالْمِقَصِّ'], audio: 'audio/sentences/sentence_22.mp3' },
+        { meaning: 'الخال يأكل لحم الدجاج', en: 'The uncle eats chicken meat', correctOrder: ['الْخَالُ', 'يَأْكُلُ', 'لَحْمَ', 'الدَّجَاجِ'], audio: 'audio/sentences/sentence_23.mp3' },
+        { meaning: 'العمة تشرب الشاي', en: 'The aunt drinks tea', correctOrder: ['الْعَمَّةُ', 'تَشْرَبُ', 'الشَّايَ'], audio: 'audio/sentences/sentence_24.mp3' },
+        { meaning: 'نذهب إلى المدرسة بالحافلة', en: 'We go to school by bus', correctOrder: ['نَذْهَبُ', 'إِلَى', 'الْمَدْرَسَةِ', 'بِالْحَافِلَةِ'], audio: 'audio/sentences/sentence_25.mp3' }
+    ];
+
+    let currentSentenceIdx = 0;
+    let selectedWords = [];
+
+    function initSentenceBuilding() {
+        currentSentenceIdx = 0;
+        loadSentenceRound();
+    }
+
+    function loadSentenceRound() {
+        const item = sentenceList[currentSentenceIdx];
+        selectedWords = [];
+        
+        document.getElementById('sentence-meaning').innerText = item.en;
+        document.getElementById('sentence-feedback').innerText = '';
+        renderSentencePoolAndDropzone();
+    }
+
+    function renderSentencePoolAndDropzone() {
+        const item = sentenceList[currentSentenceIdx];
+        const dropzone = document.getElementById('sentence-dropzone');
+        const pool = document.getElementById('sentence-pool');
+
+        dropzone.innerHTML = '';
+        pool.innerHTML = '';
+
+        // عرض الكلمات المختارة داخل المنطقة المجمعة
+        selectedWords.forEach((word, idx) => {
+            const chip = document.createElement('div');
+            chip.className = 'word-chip bg-primary text-white';
+            chip.innerText = word;
+            chip.onclick = () => removeWordFromSentence(idx);
+            dropzone.appendChild(chip);
+        });
+
+        // خلط الكلمات لعرضها في بنك الكلمات المتاحة
+        const allWords = [...item.correctOrder].sort(() => 0.5 - Math.random());
+        allWords.forEach(word => {
+            const countInSelected = selectedWords.filter(w => w === word).length;
+            const countInTotal = item.correctOrder.filter(w => w === word).length;
+
+            if (countInSelected < countInTotal) {
+                const chip = document.createElement('div');
+                chip.className = 'word-chip';
+                chip.innerText = word;
+                chip.onclick = () => addWordToSentence(word);
+                pool.appendChild(chip);
+            }
+        });
+    }
+
+    function addWordToSentence(word) {
+        selectedWords.push(word);
+        renderSentencePoolAndDropzone();
+    }
+
+    function removeWordFromSentence(idx) {
+        selectedWords.splice(idx, 1);
+        renderSentencePoolAndDropzone();
+    }
+
+    function checkSentenceSolution() {
+        const item = sentenceList[currentSentenceIdx];
+        const feedback = document.getElementById('sentence-feedback');
+
+        if (selectedWords.join(' ') === item.correctOrder.join(' ')) {
+            feedback.innerHTML = '<span class="text-success">إجابة صحيحة وممتازة! 🎉</span>';
+            playAudio(item.audio);
+            ProgressManager.addPoints(15);
+        } else {
+            feedback.innerHTML = '<span class="text-danger">الترتيب غير صحيح، حاول ثانية ❌</span>';
+            playAudio('audio/sfx/wrong.mp3');
+        }
+    }
+
+    function nextSentenceRound() {
+        currentSentenceIdx = (currentSentenceIdx + 1) % sentenceList.length;
+        loadSentenceRound();
+    }
+
+    // --- 5. محرك لعبة Phaser.js ---
+    let phaserGameInstance = null;
+
+    function initPhaserGame() {
+        if (phaserGameInstance) {
+            phaserGameInstance.destroy(true);
+        }
+
+        const gameContainer = document.getElementById('phaser-game-container');
+        gameContainer.innerHTML = '';
+
+        const config = {
+            type: Phaser.AUTO,
+            parent: 'phaser-game-container',
+            width: 700,
+            height: 420,
+            backgroundColor: '#0f172a',
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH,
+                width: 700,
+                height: 420
+            },
+            physics: {
+                default: 'arcade',
+                arcade: { gravity: { y: 0 }, debug: false }
+            },
+            scene: {
+                create: phaserCreate,
+                update: phaserUpdate
+            }
+        };
+
+        phaserGameInstance = new Phaser.Game(config);
+    }
+
+    let targetWordObj = null;
+    let balloonGroup = [];
+    let scoreTextPhaser;
+    let phaserScore = 0;
+
+    const gameVocabs = [
+        { ar: 'تفاحة', icon: '🍎', audio: 'audio/words/apple.mp3' },
+        { ar: 'ماء', icon: '💧', audio: 'audio/words/water.mp3' },
+        { ar: 'خبز', icon: '🍞', audio: 'audio/words/bread.mp3' },
+        { ar: 'حليب', icon: '🥛', audio: 'audio/words/milk.mp3' },
+        { ar: 'كتاب', icon: '📚', audio: 'audio/words/book.mp3' },
+        { ar: 'قلم', icon: '✏️', audio: 'audio/words/pencil.mp3' },
+        { ar: 'مدرسة', icon: '🏫', audio: 'audio/words/school.mp3' },
+        { ar: 'أب', icon: '👨', audio: 'audio/words/father.mp3' },
+        { ar: 'أم', icon: '👩', audio: 'audio/words/mother.mp3' },
+        { ar: 'سيارة', icon: '🚗', audio: 'audio/words/car.mp3' },
+        { ar: 'طائرة', icon: '✈️', audio: 'audio/words/plane.mp3' },
+        { ar: 'شجرة', icon: '🌳', audio: 'audio/words/tree.mp3' }
+    ];
+
+    function phaserCreate() {
+        const scene = this;
+
+        const bg = scene.add.graphics();
+        bg.fillGradientStyle(0x1e1b4b, 0x1e1b4b, 0x312e81, 0x312e81, 1);
+        bg.fillRect(0, 0, 700, 420);
+
+        scoreTextPhaser = scene.add.text(680, 20, 'النقاط: 0', {
+            fontFamily: 'sans-serif',
+            fontSize: '20px',
+            color: '#fbbf24',
+            align: 'right'
+        }).setOrigin(1, 0);
+
+        spawnNewRound(scene);
+    }
+
+    function spawnNewRound(scene) {
+        balloonGroup.forEach(b => b.destroy());
+        balloonGroup = [];
+
+        const shuffled = [...gameVocabs].sort(() => 0.5 - Math.random());
+        const options = shuffled.slice(0, 3);
+        targetWordObj = options[Math.floor(Math.random() * options.length)];
+
+        playAudio(targetWordObj.audio);
+
+        if (scene.targetText) scene.targetText.destroy();
+        scene.targetText = scene.add.text(350, 45, `اصطد:  ${targetWordObj.ar}  🔊`, {
+            fontFamily: 'sans-serif',
+            fontSize: '28px',
+            fontStyle: 'bold',
+            color: '#38bdf8',
+            backgroundColor: '#1e293b',
+            padding: { x: 20, y: 10 }
+        }).setOrigin(0.5).setInteractive();
+
+        scene.targetText.on('pointerdown', () => playAudio(targetWordObj.audio));
+
+        const positionsX = [150, 350, 550];
+
+        options.forEach((opt, index) => {
+            const x = positionsX[index];
+            const y = 260;
+
+            const container = scene.add.container(x, y);
+
+            const colors = [0xef4444, 0x10b981, 0x3b82f6];
+    const balloonBg = scene.add.graphics();
+    balloonBg.fillStyle(colors[index % colors.length], 0.9);
+    // تم زيادة أبعاد البالون (العرض والارتفاع) لتناسب حجم النص الجديد
+    balloonBg.fillRoundedRect(-75, -58, 150, 116, 22);
+
+    const text = scene.add.text(0, -2, `${opt.icon}\n${opt.ar}`, {
+        fontFamily: 'sans-serif',
+        fontSize: '26px', // تم تكبير حجم الخط من 20px إلى 26px لزيادة وضوح القراءة
+        fontStyle: 'bold', // جعل الخط عريضاً ليكون أكثر وضوحاً
+        color: '#ffffff',
+        align: 'center'
+    }).setOrigin(0.5);
+
+    container.add([balloonBg, text]);
+    container.setSize(150, 116); // مطابقة حجم مساحة التفاعل مع الأبعاد الجديدة للبالون
+            container.setInteractive();
+
+            scene.tweens.add({
+                targets: container,
+                y: y - 25,
+                duration: 1500 + index * 300,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+
+            container.on('pointerdown', () => {
+                if (opt.ar === targetWordObj.ar) {
+                    playAudio('audio/sfx/correct.mp3');
+                    phaserScore += 10;
+                    scoreTextPhaser.setText(`النقاط: ${phaserScore}`);
+                    ProgressManager.addPoints(10);
+
+                    scene.tweens.add({
+                        targets: container,
+                        scaleX: 1.4,
+                        scaleY: 1.4,
+                        alpha: 0,
+                        duration: 300,
+                        onComplete: () => {
+                            spawnNewRound(scene);
+                        }
+                    });
+                } else {
+                    playAudio('audio/sfx/wrong.mp3');
+                    scene.tweens.add({
+                        targets: container,
+                        x: container.x + 10,
+                        duration: 50,
+                        yoyo: true,
+                        repeat: 4
+                    });
+                }
+            });
+
+            balloonGroup.push(container);
+        });
+    }
+
+    function phaserUpdate() {}
+
+    function restartPhaserGame() {
+        initPhaserGame();
+    }
+
+    // --- 6. الأحرف الأساسية ---
+    const arabicAlphabet = [
+        { char: 'أ', audio: 'audio/alphabet/1.mp3' },
+        { char: 'ب', audio: 'audio/alphabet/2.mp3' },
+        { char: 'ت', audio: 'audio/alphabet/3.mp3' },
+        { char: 'ث', audio: 'audio/alphabet/4.mp3' },
+        { char: 'ج', audio: 'audio/alphabet/5.mp3' },
+        { char: 'ح', audio: 'audio/alphabet/6.mp3' },
+        { char: 'خ', audio: 'audio/alphabet/7.mp3' },
+        { char: 'د', audio: 'audio/alphabet/8.mp3' },
+        { char: 'ذ', audio: 'audio/alphabet/9.mp3' },
+        { char: 'ر', audio: 'audio/alphabet/10.mp3' },
+        { char: 'ز', audio: 'audio/alphabet/11.mp3' },
+        { char: 'س', audio: 'audio/alphabet/12.mp3' },
+        { char: 'ش', audio: 'audio/alphabet/13.mp3' },
+        { char: 'ص', audio: 'audio/alphabet/14.mp3' },
+        { char: 'ض', audio: 'audio/alphabet/15.mp3' },
+        { char: 'ط', audio: 'audio/alphabet/16.mp3' },
+        { char: 'ظ', audio: 'audio/alphabet/17.mp3' },
+        { char: 'ع', audio: 'audio/alphabet/18.mp3' },
+        { char: 'غ', audio: 'audio/alphabet/19.mp3' },
+        { char: 'ف', audio: 'audio/alphabet/20.mp3' },
+        { char: 'ق', audio: 'audio/alphabet/21.mp3' },
+        { char: 'ك', audio: 'audio/alphabet/22.mp3' },
+        { char: 'ل', audio: 'audio/alphabet/23.mp3' },
+        { char: 'م', audio: 'audio/alphabet/24.mp3' },
+        { char: 'ن', audio: 'audio/alphabet/25.mp3' },
+        { char: 'ه', audio: 'audio/alphabet/26.mp3' },
+        { char: 'و', audio: 'audio/alphabet/27.mp3' },
+        { char: 'ي', audio: 'audio/alphabet/28.mp3' }
+    ];
+
+    function initAlphabetGrid() {
+        const container = document.getElementById('alphabetContainer');
+        if (!container) return;
+        container.innerHTML = '';
+        arabicAlphabet.forEach(item => {
+            const col = document.createElement('div');
+            col.className = 'col-3 col-sm-2 col-md-2';
+            col.innerHTML = `<div class="grid-item" onclick="playAudio('${item.audio}')">${item.char}</div>`;
+            container.appendChild(col);
+        });
+    }
+
+    // --- 7. الأرقام (0 إلى 100) ---
+    function getArabicNumberWord(num) {
+        if (num === 0) return 'صفر';
+        if (num === 100) return 'مئة';
+        
+        const units = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة'];
+        const teens = ['عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
+        const tens = ['', '', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
+
+        if (num < 10) return units[num];
+        if (num >= 10 && num < 20) return teens[num - 10];
+        
+        const unitDigit = num % 10;
+        const tenDigit = Math.floor(num / 10);
+
+        if (unitDigit === 0) return tens[tenDigit];
+        return `${units[unitDigit]} و${tens[tenDigit]}`;
+    }
+
+    function toArabicDigits(num) {
+        return num.toString().replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+    }
+
+    function initNumbersGrid() {
+        const container = document.getElementById('numbersContainer');
+        if (!container) return;
+        container.innerHTML = '';
+        
+        for (let i = 0; i <= 100; i++) {
+            const digit = toArabicDigits(i);
+            const word = getArabicNumberWord(i);
+            const audioPath = `audio/numbers/${i}.mp3`;
+            
+            const col = document.createElement('div');
+            col.className = 'col-4 col-sm-3 col-md-2';
+            col.innerHTML = `
+                <div class="grid-item" onclick="playAudio('${audioPath}')">
+                    <span>${digit}</span>
+                    <span class="sub-text text-muted">${word}</span>
+                </div>`;
+            container.appendChild(col);
+        }
+    }
+
+    // --- 8. بيانات المفردات والبطاقات ---
+    const restaurantData = [
+        { icon: '🍎', ar: 'تفاحة', en: 'Apple', desc: 'فواكه لذيذة ومفيدة للصحة.', audio: 'audio/words/apple.mp3' },
+        { icon: '💧', ar: 'ماء', en: 'Water', desc: 'شراب أساسي لحياة الإنسان.', audio: 'audio/words/water.mp3' },
+        { icon: '🍞', ar: 'خبز', en: 'Bread', desc: 'غذاء رئيسي يومي.', audio: 'audio/words/bread.mp3' },
+        { icon: '🥛', ar: 'حليب', en: 'Milk', desc: 'مشروب غني بالبروتين والكالسيوم.', audio: 'audio/words/milk.mp3' },
+        { icon: '☕', ar: 'قهوة', en: 'Coffee', desc: 'مشروب ساخن ومنبه.', audio: 'audio/words/coffee.mp3' },
+        { icon: '🍵', ar: 'شاي', en: 'Tea', desc: 'مشروب ساخن شائع عالمياً.', audio: 'audio/words/tea.mp3' },
+        { icon: '🧃', ar: 'عصير', en: 'Juice', desc: 'مشروب طازج من الفواكه.', audio: 'audio/words/juice.mp3' },
+        { icon: '🍲', ar: 'طعام', en: 'Food', desc: 'الوجبات الغنائية المغذية.', audio: 'audio/words/food.mp3' },
+        { icon: '🥩', ar: 'لحم', en: 'Meat', desc: 'مصدر رئيسي للبروتين.', audio: 'audio/words/meat.mp3' },
+        { icon: '🍗', ar: 'دجاج', en: 'Chicken', desc: 'لحم دجاج مشوي أو مطبوخ.', audio: 'audio/words/chicken.mp3' },
+        { icon: '🐟', ar: 'سمك', en: 'Fish', desc: 'مأكولات بحرية مفيدة.', audio: 'audio/words/fish.mp3' },
+        { icon: '🍚', ar: 'أرز', en: 'Rice', desc: 'طبق رئيسي في الوجبات.', audio: 'audio/words/rice.mp3' },
+        { icon: '🥣', ar: 'حساء', en: 'Soup', desc: 'شوربة ساخنة ومغذية.', audio: 'audio/words/soup.mp3' },
+        { icon: '🥗', ar: 'سلطة', en: 'Salad', desc: 'طبق خضروات طازجة.', audio: 'audio/words/salad.mp3' },
+        { icon: '🧀', ar: 'جبن', en: 'Cheese', desc: 'منتج مشتق من الحليب.', audio: 'audio/words/cheese.mp3' },
+        { icon: '🥚', ar: 'بيض', en: 'Egg', desc: 'غذاء غني بالبروتين.', audio: 'audio/words/egg.mp3' },
+        { icon: '🍌', ar: 'فاكهة', en: 'Fruit', desc: 'ثمار طبيعية حلوة المذاق.', audio: 'audio/words/fruit.mp3' },
+        { icon: '🥦', ar: 'خضار', en: 'Vegetables', desc: 'خضروات صحية طازجة.', audio: 'audio/words/vegetables.mp3' },
+        { icon: '🍰', ar: 'حلوى', en: 'Sweets', desc: 'كعك وحلويات شهية.', audio: 'audio/words/sweets.mp3' },
+        { icon: '🧂', ar: 'ملح', en: 'Salt', desc: 'توابل إعطاء النكهة للطعام.', audio: 'audio/words/salt.mp3' },
+        { icon: '🍬', ar: 'سكر', en: 'Sugar', desc: 'مادة لتحلية الأطعمة والمشروبات.', audio: 'audio/words/sugar.mp3' },
+        { icon: '🏪', ar: 'مطعم', en: 'Restaurant', desc: 'مكان تناول وجبات الطعام.', audio: 'audio/words/restaurant.mp3' },
+        { icon: '📜', ar: 'قائمة', en: 'Menu', desc: 'قائمة بأصناف الأطعمة والأسعار.', audio: 'audio/words/menu.mp3' },
+        { icon: '🧾', ar: 'فاتورة', en: 'Bill', desc: 'ورقة حساب الوجبة.', audio: 'audio/words/bill.mp3' },
+        { icon: '🥄', ar: 'ملعقة', en: 'Spoon', desc: 'أداة تناول الطعام والحساء.', audio: 'audio/words/spoon.mp3' }
+    ];
+    let restIndex = 0;
+    function updateRestaurantCard() {
+        const item = restaurantData[restIndex];
+        document.getElementById('rest-icon').innerText = item.icon;
+        document.getElementById('rest-ar').innerText = item.ar;
+        document.getElementById('rest-en').innerText = item.en;
+        document.getElementById('rest-desc').innerText = item.desc;
+        document.getElementById('rest-counter').innerText = restIndex + 1;
+        document.getElementById('restaurantCard').classList.remove('flipped');
+        playAudio(item.audio);
+    }
+    function nextRestaurantCard() {
+        restIndex = (restIndex + 1) % restaurantData.length;
+        updateRestaurantCard();
+    }
+    function prevRestaurantCard() {
+        restIndex = (restIndex - 1 + restaurantData.length) % restaurantData.length;
+        updateRestaurantCard();
+    }
+
+    const familyData = [
+        { icon: '👨', ar: 'أب', en: 'Father', desc: 'رب الأسرة والمسؤول عنها.', audio: 'audio/words/father.mp3' },
+        { icon: '👩', ar: 'أم', en: 'Mother', desc: 'أم الأسرة ومربية الأجيال.', audio: 'audio/words/mother.mp3' },
+        { icon: '👦', ar: 'أخ', en: 'Brother', desc: 'الابن الذكر من العائلة.', audio: 'audio/words/brother.mp3' },
+        { icon: '👧', ar: 'أخت', en: 'Sister', desc: 'الابنة الأنثى من العائلة.', audio: 'audio/words/sister.mp3' },
+        { icon: '👴', ar: 'جد', en: 'Grandfather', desc: 'والد الأب أو الأم.', audio: 'audio/words/grandfather.mp3' },
+        { icon: '👵', ar: 'جدة', en: 'Grandmother', desc: 'والدة الأب أو الأم.', audio: 'audio/words/grandmother.mp3' },
+        { icon: '👶', ar: 'ابن', en: 'Son', desc: 'الولد البار بعائلته.', audio: 'audio/words/son.mp3' },
+        { icon: '👧', ar: 'ابنة', en: 'Daughter', desc: 'البنت في الأسرة.', audio: 'audio/words/daughter.mp3' },
+        { icon: '👨‍💼', ar: 'عم', en: 'Uncle (Paternal)', desc: 'أخو الأب.', audio: 'audio/words/paternal_uncle.mp3' },
+        { icon: '👩‍💼', ar: 'عمة', en: 'Aunt (Paternal)', desc: 'أخت الأب.', audio: 'audio/words/paternal_aunt.mp3' },
+        { icon: '👨‍🏫', ar: 'خال', en: 'Uncle (Maternal)', desc: 'أخو الأم.', audio: 'audio/words/maternal_uncle.mp3' },
+        { icon: '👩‍🏫', ar: 'خالة', en: 'Aunt (Maternal)', desc: 'أخت الأم.', audio: 'audio/words/maternal_aunt.mp3' },
+        { icon: '👨‍👩‍👧‍👦', ar: 'عائلة', en: 'Family', desc: 'الأسرة المتحدة بالحب.', audio: 'audio/words/family.mp3' },
+        { icon: '🤵', ar: 'زوج', en: 'Husband', desc: 'شريك الحياة الزوجية.', audio: 'audio/words/husband.mp3' },
+        { icon: '👰', ar: 'زوجة', en: 'Wife', desc: 'شريكة الحياة والأسرة.', audio: 'audio/words/wife.mp3' },
+        { icon: '🧒', ar: 'طفل', en: 'Child', desc: 'الصغير في مراحل النمو.', audio: 'audio/words/child.mp3' },
+        { icon: '🍼', ar: 'رضيع', en: 'Baby', desc: 'الطفل حديث الولادة.', audio: 'audio/words/baby.mp3' },
+        { icon: '👦', ar: 'حفيد', en: 'Grandson', desc: 'ابن الابن أو الابنة.', audio: 'audio/words/grandson.mp3' },
+        { icon: '👧', ar: 'حفيدة', en: 'Granddaughter', desc: 'بنت الابن أو الابنة.', audio: 'audio/words/granddaughter.mp3' },
+        { icon: '👨', ar: 'صهر', en: 'In-law', desc: 'زوج الابنة أو قريب الزوجة.', audio: 'audio/words/in_law.mp3' },
+        { icon: '🤝', ar: 'قريب', en: 'Relative', desc: 'شخص يرتبط بعلاقة قرابة.', audio: 'audio/words/relative.mp3' },
+        { icon: '👩‍❤️‍👨', ar: 'والدين', en: 'Parents', desc: 'الأب والأم معاً.', audio: 'audio/words/parents.mp3' },
+        { icon: '👵👴', ar: 'أجداد', en: 'Grandparents', desc: 'الجد والجدة.', audio: 'audio/words/grandparents.mp3' },
+        { icon: '👭', ar: 'أطفال', en: 'Children', desc: 'الأبناء والصغار.', audio: 'audio/words/children.mp3' },
+        { icon: '🏠', ar: 'منزل', en: 'Home', desc: 'بيت العائلة ودافئ الأجواء.', audio: 'audio/words/home.mp3' }
+    ];
+    let famIndex = 0;
+    function updateFamilyCard() {
+        const item = familyData[famIndex];
+        document.getElementById('fam-icon').innerText = item.icon;
+        document.getElementById('fam-ar').innerText = item.ar;
+        document.getElementById('fam-en').innerText = item.en;
+        document.getElementById('fam-desc').innerText = item.desc;
+        document.getElementById('fam-counter').innerText = famIndex + 1;
+        document.getElementById('familyCard').classList.remove('flipped');
+        playAudio(item.audio);
+    }
+    function nextFamilyCard() {
+        famIndex = (famIndex + 1) % familyData.length;
+        updateFamilyCard();
+    }
+    function prevFamilyCard() {
+        famIndex = (famIndex - 1 + familyData.length) % familyData.length;
+        updateFamilyCard();
+    }
+
+    const schoolData = [
+        { icon: '📚', ar: 'كتاب', en: 'Book', desc: 'أداة للقراءة والتعلم والمعرفة.', audio: 'audio/words/book.mp3' },
+        { icon: '✏️', ar: 'قلم', en: 'Pencil', desc: 'أداة للكتابة والرسم.', audio: 'audio/words/pencil.mp3' },
+        { icon: '📓', ar: 'دفتر', en: 'Notebook', desc: 'دفتر لتدوين الملاحظات والدروس.', audio: 'audio/words/notebook.mp3' },
+        { icon: '🏫', ar: 'مدرسة', en: 'School', desc: 'مؤسسة تعليمية للطلاب.', audio: 'audio/words/school.mp3' },
+        { icon: '👨‍🏫', ar: 'معلم', en: 'Teacher', desc: 'الشخص الذي يقوم بالتدريس.', audio: 'audio/words/teacher.mp3' },
+        { icon: '🧑‍🎓', ar: 'طالب', en: 'Student', desc: 'من يتلقى العلم في المدرسة.', audio: 'audio/words/student.mp3' },
+        { icon: '🚪', ar: 'صف', en: 'Classroom', desc: 'غرفة الدراسة والتعليم.', audio: 'audio/words/classroom.mp3' },
+        { icon: '🎒', ar: 'حقيبة', en: 'Bag', desc: 'حقيبة حمل الكتب واللوازم.', audio: 'audio/words/bag.mp3' },
+        { icon: '🧹', ar: 'ممحاة', en: 'Eraser', desc: 'أداة مسح الخطأ والأقلام.', audio: 'audio/words/eraser.mp3' },
+        { icon: '📏', ar: 'مسطرة', en: 'Ruler', desc: 'أداة قياس ورسم الخطوط.', audio: 'audio/words/ruler.mp3' },
+        { icon: '🪑', ar: 'طاولة', en: 'Desk', desc: 'مكتب الجلوس والدراسة.', audio: 'audio/words/desk.mp3' },
+        { icon: '📋', ar: 'سبورة', en: 'Blackboard', desc: 'لوحة الشرح في الفصل.', audio: 'audio/words/blackboard.mp3' },
+        { icon: '💻', ar: 'حاسوب', en: 'Computer', desc: 'جهاز إلكتروني للتعلم البحثي.', audio: 'audio/words/computer.mp3' },
+        { icon: '✂️', ar: 'مقص', en: 'Scissors', desc: 'أداة قص الأوراق والأنشطة.', audio: 'audio/words/scissors.mp3' },
+        { icon: '📄', ar: 'ورقة', en: 'Paper', desc: 'ورق الكتابة والرسم.', audio: 'audio/words/paper.mp3' },
+        { icon: '🎨', ar: 'ألوان', en: 'Colors', desc: 'أقلام وتلوين الرسومات.', audio: 'audio/words/colors.mp3' },
+        { icon: '🗺️', ar: 'خريطة', en: 'Map', desc: 'رسم توضيحي للبلدان والجغرافيا.', audio: 'audio/words/map.mp3' },
+        { icon: '📝', ar: 'امتحان', en: 'Exam', desc: 'اختبار تقييم مستوى الفهم.', audio: 'audio/words/exam.mp3' },
+        { icon: '📖', ar: 'مكتبة', en: 'Library', desc: 'مكان قراءة الكتب والمراجع.', audio: 'audio/words/library.mp3' },
+        { icon: '📑', ar: 'واجب', en: 'Homework', desc: 'تمارين منزلية للتدريب.', audio: 'audio/words/homework.mp3' },
+        { icon: '📖', ar: 'درس', en: 'Lesson', desc: 'موضوع الشرح التعليمي.', audio: 'audio/words/lesson.mp3' },
+        { icon: '🖊️', ar: 'قلم حبر', en: 'Ink Pen', desc: 'قلم كتابة الحبر الثابت.', audio: 'audio/words/ink_pen.mp3' },
+        { icon: '🧪', ar: 'مختبر', en: 'Laboratory', desc: 'قاعة التجارب والعلوم.', audio: 'audio/words/lab.mp3' },
+        { icon: '🚌', ar: 'حافلة', en: 'Bus', desc: 'وسيلة نقل الطلاب للمدرسة.', audio: 'audio/words/bus.mp3' },
+        { icon: '📜', ar: 'شهادة', en: 'Certificate', desc: 'وثيقة النجاح والتفوق.', audio: 'audio/words/certificate.mp3' }
+    ];
+    let schIndex = 0;
+    function updateSchoolCard() {
+        const item = schoolData[schIndex];
+        document.getElementById('sch-icon').innerText = item.icon;
+        document.getElementById('sch-ar').innerText = item.ar;
+        document.getElementById('sch-en').innerText = item.en;
+        document.getElementById('sch-desc').innerText = item.desc;
+        document.getElementById('sch-counter').innerText = schIndex + 1;
+        document.getElementById('schoolCard').classList.remove('flipped');
+        playAudio(item.audio);
+    }
+    function nextSchoolCard() {
+        schIndex = (schIndex + 1) % schoolData.length;
+        updateSchoolCard();
+    }
+    function prevSchoolCard() {
+        schIndex = (schIndex - 1 + schoolData.length) % schoolData.length;
+        updateSchoolCard();
+    }
+
+    function toggleCard(containerOrEl, audioPath) {
+        let card;
+        if (containerOrEl.classList && containerOrEl.classList.contains('flashcard')) {
+            card = containerOrEl;
+        } else {
+            card = containerOrEl.querySelector('.flashcard');
+        }
+        if (card) card.classList.toggle('flipped');
+        if (audioPath) {
+            playAudio(audioPath);
+        }
+    }
+// --- البيانات البرمجية الكاملة للأقسام الـ 8 الجديدة (25 كلمة لكل قسم) ---
+
+const homeFurnData = [
+    { icon: '🏠', ar: 'منزل', en: 'House', desc: 'المكان الذي نعيش فيه.', audio: 'audio/home/house.mp3' },
+    { icon: '🛏️', ar: 'غرفة نوم', en: 'Bedroom', desc: 'مخصصة للنوم والراحة.', audio: 'audio/home/bedroom.mp3' },
+    { icon: '🍳', ar: 'مطبخ', en: 'Kitchen', desc: 'لإعداد الطعام والطهي.', audio: 'audio/home/kitchen.mp3' },
+    { icon: '🚿', ar: 'حمام', en: 'Bathroom', desc: 'للاغتسال والعناية الشخصية.', audio: 'audio/home/bathroom.mp3' },
+    { icon: '🛋️', ar: 'أريكة', en: 'Sofa', desc: 'مقعد مريح للجلوس في غرفة المعيشة.', audio: 'audio/home/sofa.mp3' },
+    { icon: '🛏️', ar: 'سرير', en: 'Bed', desc: 'مخصص للنوم ليلاً.', audio: 'audio/home/bed.mp3' },
+    { icon: '🧊', ar: 'ثلاجة', en: 'Refrigerator', desc: 'لحفظ الأطعمة والمشروبات باردة.', audio: 'audio/home/fridge.mp3' },
+    { icon: '🪑', ar: 'طاولة', en: 'Table', desc: 'توضع عليها الأغراض والطعام.', audio: 'audio/home/table.mp3' },
+    { icon: '🪑', ar: 'كرسي', en: 'Chair', desc: 'أداة مخصصة للجلوس.', audio: 'audio/home/chair.mp3' },
+    { icon: '🚪', ar: 'باب', en: 'Door', desc: 'مدخل الغرفة أو المنزل.', audio: 'audio/home/door.mp3' },
+    { icon: '🪟', ar: 'نافذة', en: 'Window', desc: 'لإدخال الهواء والنور.', audio: 'audio/home/window.mp3' },
+    { icon: '💡', ar: 'مصباح', en: 'Lamp', desc: 'أداة تضيء الغرفة.', audio: 'audio/home/lamp.mp3' },
+    { icon: '📺', ar: 'تلفاز', en: 'Television', desc: 'لمشاهدة البرامج والترفيه.', audio: 'audio/home/tv.mp3' },
+    { icon: '🧺', ar: 'سلة', en: 'Basket', desc: 'لوضع المهملات أو الملابس.', audio: 'audio/home/basket.mp3' },
+    { icon: '🧹', ar: 'مكنسة', en: 'Broom', desc: 'لتنظيف الأرضيات.', audio: 'audio/home/broom.mp3' },
+    { icon: '🧽', ar: 'إسفنجة', en: 'Sponge', desc: 'لتنظيف الأسطح والأطباق.', audio: 'audio/home/sponge.mp3' },
+    { icon: '🪞', ar: 'مرآة', en: 'Mirror', desc: 'لعكس الصور وت ؤكد الهندام.', audio: 'audio/home/mirror.mp3' },
+    { icon: '🗄️', ar: 'خزانة', en: 'Wardrobe', desc: 'لتخزين وترتيب الملابس.', audio: 'audio/home/wardrobe.mp3' },
+    { icon: '🗄️', ar: 'درج', en: 'Drawer', desc: 'حجرة تخزين صغيرة داخل الأثاث.', audio: 'audio/home/drawer.mp3' },
+    { icon: '🪴', ar: 'نبتة', en: 'Plant', desc: 'للزينة داخل المنزل.', audio: 'audio/home/plant.mp3' },
+    { icon: '🔌', ar: 'مقبس', en: 'Socket', desc: 'مصدر لتوصيل الكهرباء.', audio: 'audio/home/socket.mp3' },
+    { icon: '🪭', ar: 'مروحة', en: 'Fan', desc: 'لتلطيف الهواء الحار.', audio: 'audio/home/fan.mp3' },
+    { icon: '❄️', ar: 'مكيف', en: 'Air Conditioner', desc: 'لتبريد وتدفئة الغرفة.', audio: 'audio/home/ac.mp3' },
+    { icon: '🧯', ar: 'مطفأة', en: 'Extinguisher', desc: 'لإخماد الحرائق الطارئة.', audio: 'audio/home/extinguisher.mp3' },
+    { icon: '🔑', ar: 'مفتاح', en: 'Key', desc: 'لفتح وقفل الأبواب.', audio: 'audio/home/key.mp3' }
+];
+
+const jobsData = [
+    { icon: '👨‍⚕️', ar: 'طبيب', en: 'Doctor', desc: 'يعالج المرضى.', audio: 'audio/jobs/doctor.mp3' },
+    { icon: '👷', ar: 'مهندس', en: 'Engineer', desc: 'يصمم المباني والمنشآت.', audio: 'audio/jobs/engineer.mp3' },
+    { icon: '👨‍🏫', ar: 'معلم', en: 'Teacher', desc: 'يشرح الدروس للطلاب.', audio: 'audio/jobs/teacher.mp3' },
+    { icon: '👮', ar: 'شرطي', en: 'Policeman', desc: 'يحافظ على الأمن والنظام.', audio: 'audio/jobs/police.mp3' },
+    { icon: '👨‍🍳', ar: 'طاهٍ', en: 'Chef', desc: 'يعد أشهى المأكولات.', audio: 'audio/jobs/chef.mp3' },
+    { icon: '⚖️', ar: 'محامٍ', en: 'Lawyer', desc: 'يدافع عن الحقوق في القضاء.', audio: 'audio/jobs/lawyer.mp3' },
+    { icon: '✍️', ar: 'صحفي', en: 'Journalist', desc: 'ينقل الأخبار والتحقيقات.', audio: 'audio/jobs/journalist.mp3' },
+    { icon: '🎨', ar: 'فنان', en: 'Artist', desc: 'يرسم الإبداعات الفنية.', audio: 'audio/jobs/artist.mp3' },
+    { icon: '🪵', ar: 'نجار', en: 'Carpenter', desc: 'يصنع الأثاث الخشبي.', audio: 'audio/jobs/carpenter.mp3' },
+    { icon: '🧵', ar: 'خياط', en: 'Tailor', desc: 'يحيك الملابس والأقمشة.', audio: 'audio/jobs/tailor.mp3' },
+    { icon: '💊', ar: 'صيدلي', en: 'Pharmacist', desc: 'يحضر ويصرف الأدوية.', audio: 'audio/jobs/pharmacist.mp3' },
+    { icon: '🚗', ar: 'سائق', en: 'Driver', desc: 'يقود وسائل المرور.', audio: 'audio/jobs/driver.mp3' },
+    { icon: '🧑‍🌾', ar: 'مزارع', en: 'Farmer', desc: 'يزرع الأرض ويحصده ا.', audio: 'audio/jobs/farmer.mp3' },
+    { icon: '🔌', ar: 'كهربائي', en: 'Electrician', desc: 'يصلح التمديدات الكهربائية.', audio: 'audio/jobs/electrician.mp3' },
+    { icon: '🚒', ar: 'رجل إطفاء', en: 'Firefighter', desc: 'يخمد الحرائق وينقذ الأرواح.', audio: 'audio/jobs/firefighter.mp3' },
+    { icon: '🧑‍✈️', ar: 'طيار', en: 'Pilot', desc: 'يقود الطائرات الجوية.', audio: 'audio/jobs/pilot.mp3' },
+    { icon: '🧑‍🔬', ar: 'باحث', en: 'Researcher', desc: 'يجري التجارب العلمية.', audio: 'audio/jobs/researcher.mp3' },
+    { icon: '🦷', ar: 'طبيب أسنان', en: 'Dentist', desc: 'يعتني بصحة الأسنان والفم.', audio: 'audio/jobs/dentist.mp3' },
+    { icon: '🧱', ar: 'بناء', en: 'Builder', desc: 'يبني الجدران والأساسات.', audio: 'audio/jobs/builder.mp3' },
+    { icon: '💇', ar: 'مصفف شعر', en: 'Hairdresser', desc: 'يهتم بتصفيف الشعر وقصه.', audio: 'audio/jobs/hairdresser.mp3' },
+    { icon: '🧑‍🔧', ar: 'ميكانيكي', en: 'Mechanic', desc: 'يصلح أعطال السيارات.', audio: 'audio/jobs/mechanic.mp3' },
+    { icon: '🧑‍💼', ar: 'موظف', en: 'Employee', desc: 'يعمل في المكاتب والشركات.', audio: 'audio/jobs/employee.mp3' },
+    { icon: '🪖', ar: 'جندي', en: 'Soldier', desc: 'يحمي الوطن والحدود.', audio: 'audio/jobs/soldier.mp3' },
+    { icon: '🧑‍🎤', ar: 'مغني', en: 'Singer', desc: 'يؤدي الأناشيد والأغاني.', audio: 'audio/jobs/singer.mp3' },
+    { icon: '📸', ar: 'مصور', en: 'Photographer', desc: 'يلتقط الصور الفوتوغرافية.', audio: 'audio/jobs/photographer.mp3' }
+];
+
+const clothingData = [
+    { icon: '👕', ar: 'قميص', en: 'Shirt', desc: 'ملابس علوية.', audio: 'audio/clothing/shirt.mp3' },
+    { icon: '👖', ar: 'بنطلون', en: 'Trousers', desc: 'ملابس للنصف السفلي.', audio: 'audio/clothing/trousers.mp3' },
+    { icon: '👞', ar: 'حذاء', en: 'Shoe', desc: 'يلبس في القدمين.', audio: 'audio/clothing/shoe.mp3' },
+    { icon: '👗', ar: 'فستان', en: 'Dress', desc: 'زي نسائي أنيق.', audio: 'audio/clothing/dress.mp3' },
+    { icon: '🧥', ar: 'معطف', en: 'Coat', desc: 'معطف للوقاية من البرد.', audio: 'audio/clothing/coat.mp3' },
+    { icon: '👒', ar: 'قبعة', en: 'Hat', desc: 'توضع على الرأس.', audio: 'audio/clothing/hat.mp3' },
+    { icon: '🧦', ar: 'جورب', en: 'Sock', desc: 'يلبس تحت الحذاء.', audio: 'audio/clothing/sock.mp3' },
+    { icon: '👓', ar: 'نظارة', en: 'Glasses', desc: 'للنظر أو حماية العين.', audio: 'audio/clothing/glasses.mp3' },
+    { icon: '🥋', ar: 'حزام', en: 'Belt', desc: 'لتثبيت البنطلون.', audio: 'audio/clothing/belt.mp3' },
+    { icon: '👘', ar: 'تنورة', en: 'Skirt', desc: 'رداء نسائي سفلي.', audio: 'audio/clothing/skirt.mp3' },
+    { icon: '👔', ar: 'بدلة', en: 'Suit', desc: 'طقم رسمي أنيق.', audio: 'audio/clothing/suit.mp3' },
+    { icon: '👚', ar: 'بيجاما', en: 'Pyjamas', desc: 'ملابس مخصصة للنوم.', audio: 'audio/clothing/pyjamas.mp3' },
+    { icon: '🧣', ar: 'وشاح', en: 'Scarf', desc: 'يلف حول العنق للتدفئة.', audio: 'audio/clothing/scarf.mp3' },
+    { icon: '🧤', ar: 'قفاز', en: 'Glove', desc: 'لتغطية وتدفئة اليدين.', audio: 'audio/clothing/glove.mp3' },
+    { icon: '🩳', ar: 'شورت', en: 'Shorts', desc: 'بنطلون قصير صيفي.', audio: 'audio/clothing/shorts.mp3' },
+    { icon: '👟', ar: 'حذاء رياضي', en: 'Sneaker', desc: 'مخصص للرياضة والمشي.', audio: 'audio/clothing/sneaker.mp3' },
+    { icon: '👡', ar: 'حذاء صيفي', en: 'Sandals', desc: 'حذاء خفيف مفتوح.', audio: 'audio/clothing/sandals.mp3' },
+    { icon: '💍', ar: 'خاتم', en: 'Ring', desc: 'حلي للزينة في الاصبع.', audio: 'audio/clothing/ring.mp3' },
+    { icon: '📿', ar: 'قلادة', en: 'Necklace', desc: 'توضع حول العنق للزينة.', audio: 'audio/clothing/necklace.mp3' },
+    { icon: '👜', ar: 'حقيبة يد', en: 'Handbag', desc: 'لحمل الأغراض الشخصية.', audio: 'audio/clothing/bag.mp3' },
+    { icon: '☂️', ar: 'مظلة', en: 'Umbrella', desc: 'للوقاية من المطر والشمس.', audio: 'audio/clothing/umbrella.mp3' },
+    { icon: '👑', ar: 'تاج', en: 'Crown', desc: 'يزين رأس الملوك.', audio: 'audio/clothing/crown.mp3' },
+    { icon: '🥼', ar: 'معطف مختبر', en: 'Lab Coat', desc: 'ارتداء خاص بالمعامل.', audio: 'audio/clothing/labcoat.mp3' },
+    { icon: '🦺', ar: 'رداء أمان', en: 'Safety Vest', desc: 'للحماية والرؤية الواضحة.', audio: 'audio/clothing/vest.mp3' },
+    { icon: '🥿', ar: 'حذاء مسطح', en: 'Flat Shoe', desc: 'حذاء نسائي مريح.', audio: 'audio/clothing/flatshoe.mp3' }
+];
+
+const weatherData = [
+    { icon: '☀️', ar: 'شمس', en: 'Sun', desc: 'تضيء الكون نهاراً.', audio: 'audio/weather/sun.mp3' },
+    { icon: '🌧️', ar: 'مطر', en: 'Rain', desc: 'قطرات الماء النازلة من السماء.', audio: 'audio/weather/rain.mp3' },
+    { icon: '💨', ar: 'رياح', en: 'Wind', desc: 'هواء متحرك في الجو.', audio: 'audio/weather/wind.mp3' },
+    { icon: '☁️', ar: 'سحاب', en: 'Cloud', desc: 'تجمعات بخار الماء في السماء.', audio: 'audio/weather/cloud.mp3' },
+    { icon: '🌊', ar: 'بحر', en: 'Sea', desc: 'مسطح مائي واسع.', audio: 'audio/weather/sea.mp3' },
+    { icon: '⛰️', ar: 'جبل', en: 'Mountain', desc: 'ارتفاع صخري ضخم.', audio: 'audio/weather/mountain.mp3' },
+    { icon: '🌳', ar: 'شجرة', en: 'Tree', desc: 'نبات خشبي كبير.', audio: 'audio/weather/tree.mp3' },
+    { icon: '🌊', ar: 'نهر', en: 'River', desc: 'مجرى مائي عذب.', audio: 'audio/weather/river.mp3' },
+    { icon: '❄️', ar: 'ثلج', en: 'Snow', desc: 'ماء متجمد ساقط.', audio: 'audio/weather/snow.mp3' },
+    { icon: '🔥', ar: 'حار', en: 'Hot', desc: 'وصف لارتفاع درجات الحرارة.', audio: 'audio/weather/hot.mp3' },
+    { icon: '🧊', ar: 'بارد', en: 'Cold', desc: 'وصف لانخفاض الحرارة.', audio: 'audio/weather/cold.mp3' },
+    { icon: '⛈️', ar: 'عاصفة', en: 'Storm', desc: 'طقس شديد الرياح والأمطار.', audio: 'audio/weather/storm.mp3' },
+    { icon: '🌈', ar: 'قوس قزح', en: 'Rainbow', desc: 'ألوان ملونة تظهر بالسماء.', audio: 'audio/weather/rainbow.mp3' },
+    { icon: '⚡', ar: 'برق', en: 'Lightning', desc: 'وميض ضوئي ساطع بالسماء.', audio: 'audio/weather/lightning.mp3' },
+    { icon: '🌩️', ar: 'رعد', en: 'Thunder', desc: 'صوت العاصفة القوي.', audio: 'audio/weather/thunder.mp3' },
+    { icon: '🌫️', ar: 'ضباب', en: 'Fog', desc: 'سحاب منخفض يحجب الرؤية.', audio: 'audio/weather/fog.mp3' },
+    { icon: '🌙', ar: 'قمر', en: 'Moon', desc: 'نير الليل المنير.', audio: 'audio/weather/moon.mp3' },
+    { icon: '⭐', ar: 'نجمة', en: 'Star', desc: 'جرم سماوي مضيء ليلاً.', audio: 'audio/weather/star.mp3' },
+    { icon: '🌍', ar: 'كوكب', en: 'Planet', desc: 'جرم يدور في الفضاء.', audio: 'audio/weather/planet.mp3' },
+    { icon: '🏜️', ar: 'صحراء', en: 'Desert', desc: 'منطقة رملية جافة.', audio: 'audio/weather/desert.mp3' },
+    { icon: '🌺', ar: 'زهرة', en: 'Flower', desc: 'جزء النبات الجميل الملون.', audio: 'audio/weather/flower.mp3' },
+    { icon: '🌾', ar: 'عشب', en: 'Grass', desc: 'نباتات خضراء قصيرة.', audio: 'audio/weather/grass.mp3' },
+    { icon: '🌋', ar: 'بركان', en: 'Volcano', desc: 'فتحة تخرج منها الحمم.', audio: 'audio/weather/volcano.mp3' },
+    { icon: '💧', ar: 'قطرة', en: 'Drop', desc: 'جزء صغير من السائل.', audio: 'audio/weather/drop.mp3' },
+    { icon: '🌀', ar: 'إعصار', en: 'Hurricane', desc: 'دوارة هوائية مدمرة.', audio: 'audio/weather/hurricane.mp3' }
+];
+
+const transportData = [
+    { icon: '🚗', ar: 'سيارة', en: 'Car', desc: 'مركبة برية شخصية.', audio: 'audio/transport/car.mp3' },
+    { icon: '🚆', ar: 'قطار', en: 'Train', desc: 'يسير على القضبان الحديدية.', audio: 'audio/transport/train.mp3' },
+    { icon: '✈️', ar: 'طائرة', en: 'Airplane', desc: 'تطير في الأجواء.', audio: 'audio/transport/plane.mp3' },
+    { icon: '🚌', ar: 'حافلة', en: 'Bus', desc: 'لنقل الركاب الجماعي.', audio: 'audio/transport/bus.mp3' },
+    { icon: '🚉', ar: 'محطة', en: 'Station', desc: 'موقف وسائل النقل.', audio: 'audio/transport/station.mp3' },
+    { icon: '🎫', ar: 'تذكرة', en: 'Ticket', desc: 'تصريح ركوب الرحلة.', audio: 'audio/transport/ticket.mp3' },
+    { icon: '✈️', ar: 'مطار', en: 'Airport', desc: 'مهبط ومقلع الطائرات.', audio: 'audio/transport/airport.mp3' },
+    { icon: '🚢', ar: 'سفينة', en: 'Ship', desc: 'مركبة بحرية ضخمة.', audio: 'audio/transport/ship.mp3' },
+    { icon: '🚲', ar: 'دراجة', en: 'Bicycle', desc: 'دراجة تعمل بدواسات.', audio: 'audio/transport/bike.mp3' },
+    { icon: '🚦', ar: 'إشارة مرور', en: 'Traffic Light', desc: 'تنظم حركة السيارات.', audio: 'audio/transport/light.mp3' },
+    { icon: '🛣️', ar: 'شارع', en: 'Street', desc: 'طريق سير السيارات.', audio: 'audio/transport/street.mp3' },
+    { icon: '🧳', ar: 'حقيبة سفر', en: 'Suitcase', desc: 'لحمل أغراض الرحلات.', audio: 'audio/transport/suitcase.mp3' },
+    { icon: '🚁', ar: 'طائرة هليكوبتر', en: 'Helicopter', desc: 'طائرة عمودية التحليق.', audio: 'audio/transport/copter.mp3' },
+    { icon: '🛵', ar: 'دراجة نارية', en: 'Scooter', desc: 'دراجة تعمل بمحرك.', audio: 'audio/transport/scooter.mp3' },
+    { icon: '⛵', ar: 'قارب', en: 'Boat', desc: 'مركب بحر صغير.', audio: 'audio/transport/boat.mp3' },
+    { icon: '🚀', ar: 'صاروخ', en: 'Rocket', desc: 'للسفر الفضائي العميق.', audio: 'audio/transport/rocket.mp3' },
+    { icon: '🚇', ar: 'مترو', en: 'Metro', desc: 'قطار أنفاق المدن.', audio: 'audio/transport/metro.mp3' },
+    { icon: '🛻', ar: 'شاحنة صغيرة', en: 'Pickup', desc: 'للنقل الخفيف.', audio: 'audio/transport/pickup.mp3' },
+    { icon: '🚛', ar: 'شاحنة', en: 'Truck', desc: 'للنقل الثقيل والبضائع.', audio: 'audio/transport/truck.mp3' },
+    { icon: '🛞', ar: 'إطار سيارة', en: 'Tire', desc: 'عجلة مطاطية للمركبة.', audio: 'audio/transport/tire.mp3' },
+    { icon: '⛽', ar: 'محطة وقود', en: 'Gas Station', desc: 'لتعبئة وقود السيارات.', audio: 'audio/transport/gas.mp3' },
+    { icon: '🪪', ar: 'جواز سفر', en: 'Passport', desc: 'وثيقة السفر الدولية.', audio: 'audio/transport/passport.mp3' },
+    { icon: '🗺️', ar: 'خريطة', en: 'Map', desc: 'لتحديد الطرق والأماكن.', audio: 'audio/transport/map.mp3' },
+    { icon: '🛟', ar: 'طوق نجاة', en: 'Lifebuoy', desc: 'أداة إنقاذ بحرية.', audio: 'audio/transport/buoy.mp3' },
+    { icon: '⚓', ar: 'مرساة', en: 'Anchor', desc: 'لتثبيت السفن بالماء.', audio: 'audio/transport/anchor.mp3' }
+];
+
+const bodyData = [
+    { icon: '🧠', ar: 'رأس', en: 'Head', desc: 'القسم العلوي للجسم.', audio: 'audio/body/head.mp3' },
+    { icon: '✋', ar: 'يد', en: 'Hand', desc: 'للمسك والعمل.', audio: 'audio/body/hand.mp3' },
+    { icon: '👁️', ar: 'عين', en: 'Eye', desc: 'لعضو الإبصار والرؤية.', audio: 'audio/body/eye.mp3' },
+    { icon: '👂', ar: 'أذن', en: 'Ear', desc: 'لعضو السمع.', audio: 'audio/body/ear.mp3' },
+    { icon: '👃', ar: 'أنف', en: 'Nose', desc: 'لعضو الشم.', audio: 'audio/body/nose.mp3' },
+    { icon: '👄', ar: 'فم', en: 'Mouth', desc: 'للكلام وتناول الطعام.', audio: 'audio/body/mouth.mp3' },
+    { icon: '🦵', ar: 'رجل', en: 'Leg', desc: 'للمشي والحركة.', audio: 'audio/body/leg.mp3' },
+    { icon: '❤️', ar: 'قلب', en: 'Heart', desc: 'ضخ الدم للجسم.', audio: 'audio/body/heart.mp3' },
+    { icon: '🤒', ar: 'ألم', en: 'Pain', desc: 'شعور بالمرض أو التعب.', audio: 'audio/body/pain.mp3' },
+    { icon: '💊', ar: 'دواء', en: 'Medicine', desc: 'لعلاج الأمراض.', audio: 'audio/body/medicine.mp3' },
+    { icon: '🏥', ar: 'مستشفى', en: 'Hospital', desc: 'مبنى علاج المرضى.', audio: 'audio/body/hospital.mp3' },
+    { icon: '🏬', ar: 'صيدلية', en: 'Pharmacy', desc: 'لبيع الأدوية.', audio: 'audio/body/pharmacy.mp3' },
+    { icon: '🦷', ar: 'سن', en: 'Tooth', desc: 'داخل الفم لمضغ الطعام.', audio: 'audio/body/tooth.mp3' },
+    { icon: '👅', ar: 'لسان', en: 'Tongue', desc: 'للذوق والنطق.', audio: 'audio/body/tongue.mp3' },
+    { icon: '💇', ar: 'شعر', en: 'Hair', desc: 'ينمو على الرأس والجسم.', audio: 'audio/body/hair.mp3' },
+    { icon: '🦾', ar: 'ذراع', en: 'Arm', desc: 'الطرف العلوي.', audio: 'audio/body/arm.mp3' },
+    { icon: '🦶', ar: 'قدم', en: 'Foot', desc: 'نهاية الرجل.', audio: 'audio/body/foot.mp3' },
+    { icon: '🩸', ar: 'دم', en: 'Blood', desc: 'السائل الحيوي بالجسم.', audio: 'audio/body/blood.mp3' },
+    { icon: '🩺', ar: 'سماعة طبية', en: 'Stethoscope', desc: 'لفحص نبضات القلب.', audio: 'audio/body/stethoscope.mp3' },
+    { icon: '🩹', ar: 'ضمادة', en: 'Bandage', desc: 'لتغطية الجروح.', audio: 'audio/body/bandage.mp3' },
+    { icon: '🌡️', ar: 'ميزان حرارة', en: 'Thermometer', desc: 'قياس حرارة الجسم.', audio: 'audio/body/thermometer.mp3' },
+    { icon: '♿', ar: 'كرسي متحرك', en: 'Wheelchair', desc: 'لمساعدة غير القادرين عالحركة.', audio: 'audio/body/wheelchair.mp3' },
+    { icon: '🩼', ar: 'عكاز', en: 'Crutch', desc: 'دعم للمشي.', audio: 'audio/body/crutch.mp3' },
+    { icon: '👓', ar: 'نظارة طبية', en: 'Medical Glasses', desc: 'تصحيح الإبصار.', audio: 'audio/body/mglasses.mp3' },
+    { icon: '🧼', ar: 'صابون', en: 'Soap', desc: 'لتنظيف وتطهير الأيدي.', audio: 'audio/body/soap.mp3' }
+];
+
+const colorsData = [
+    { icon: '🔴', ar: 'أحمر', en: 'Red', desc: 'لون زاهي.', audio: 'audio/colors/red.mp3' },
+    { icon: '🔵', ar: 'أزرق', en: 'Blue', desc: 'لون السماء والبحر.', audio: 'audio/colors/blue.mp3' },
+    { icon: '🟢', ar: 'أخضر', en: 'Green', desc: 'لون الطبيعة والأشجار.', audio: 'audio/colors/green.mp3' },
+    { icon: '🟡', ar: 'أصفر', en: 'Yellow', desc: 'لون الشمس اللامعة.', audio: 'audio/colors/yellow.mp3' },
+    { icon: '⚫', ar: 'أسود', en: 'Black', desc: 'اللون الداكن.', audio: 'audio/colors/black.mp3' },
+    { icon: '⚪', ar: 'أبيض', en: 'White', desc: 'لون النقاء والصفاء.', audio: 'audio/colors/white.mp3' },
+    { icon: '🟠', ar: 'برتقالي', en: 'Orange', desc: 'لون الثمار والغروب.', audio: 'audio/colors/orange.mp3' },
+    { icon: '🟣', ar: 'بنفسجي', en: 'Purple', desc: 'لون الزهور الملكية.', audio: 'audio/colors/purple.mp3' },
+    { icon: '🟤', ar: 'بني', en: 'Brown', desc: 'لون التراب والخشب.', audio: 'audio/colors/brown.mp3' },
+    { icon: '🔘', ar: 'رمادي', en: 'Gray', desc: 'بين الأبيض والأسود.', audio: 'audio/colors/gray.mp3' },
+    { icon: '⭕', ar: 'دائرة', en: 'Circle', desc: 'شكل هندسي مستدير.', audio: 'audio/colors/circle.mp3' },
+    { icon: '🟥', ar: 'مربع', en: 'Square', desc: 'أربعة أضلاع متساوية.', audio: 'audio/colors/square.mp3' },
+    { icon: '🔺', ar: 'مثلث', en: 'Triangle', desc: 'ثلاثة أضلاع هندسية.', audio: 'audio/colors/triangle.mp3' },
+    { icon: '⭐', ar: 'نجمة', en: 'Star', desc: 'شكل ذو زوايا متعددة.', audio: 'audio/colors/cstar.mp3' },
+    { icon: '➡️', ar: 'يمين', en: 'Right', desc: 'اتجاه الجهة اليمنى.', audio: 'audio/colors/right.mp3' },
+    { icon: '⬅️', ar: 'يسار', en: 'Left', desc: 'اتجاه الجهة اليسرى.', audio: 'audio/colors/left.mp3' },
+    { icon: '⬆️', ar: 'أمام', en: 'Front', desc: 'الاتجاه نحو الأمام.', audio: 'audio/colors/front.mp3' },
+    { icon: '⬇️', ar: 'خلف', en: 'Back', desc: 'الاتجاه للوراء.', audio: 'audio/colors/back.mp3' },
+    { icon: '↗️', ar: 'أعلى', en: 'Up', desc: 'باتجاه الفوق.', audio: 'audio/colors/up.mp3' },
+    { icon: '↙️', ar: 'أسفل', en: 'Down', desc: 'باتجاه التحت.', audio: 'audio/colors/down.mp3' },
+    { icon: '🔷', ar: 'معين', en: 'Rhombus', desc: 'شكل هندسي مائل.', audio: 'audio/colors/rhombus.mp3' },
+    { icon: '🟪', ar: 'مستطيل', en: 'Rectangle', desc: 'أضلاع متطابقة متقابلة.', audio: 'audio/colors/rectangle.mp3' },
+    { icon: '🔲', ar: 'إطار', en: 'Frame', desc: 'يحيط بالأشياء.', audio: 'audio/colors/frame.mp3' },
+    { icon: '↔️', ar: 'بين', en: 'Between', desc: 'في المنتصف.', audio: 'audio/colors/between.mp3' },
+    { icon: '📍', ar: 'هنا', en: 'Here', desc: 'تحديد المكان الحالي.', audio: 'audio/colors/here.mp3' }
+];
+
+const timeData = [
+    { icon: '🌅', ar: 'صباح', en: 'Morning', desc: 'أول النهار.', audio: 'audio/time/morning.mp3' },
+    { icon: '🌇', ar: 'مساء', en: 'Evening', desc: 'أول الليل.', audio: 'audio/time/evening.mp3' },
+    { icon: '🌙', ar: 'ليل', en: 'Night', desc: 'فترة الظلام.', audio: 'audio/time/night.mp3' },
+    { icon: '☀️', ar: 'نهار', en: 'Day', desc: 'فترة الضوء.', audio: 'audio/time/day.mp3' },
+    { icon: '⏰', ar: 'ساعة', en: 'Clock', desc: 'لقياس الوقت.', audio: 'audio/time/clock.mp3' },
+    { icon: '⏱️', ar: 'دقيقة', en: 'Minute', desc: 'جزء من الساعة.', audio: 'audio/time/minute.mp3' },
+    { icon: '📅', ar: 'اليوم', en: 'Today', desc: 'الوقت الحالي.', audio: 'audio/time/today.mp3' },
+    { icon: '🌆', ar: 'غسق', en: 'Dusk', desc: 'قبيل الليل.', audio: 'audio/time/dusk.mp3' },
+    { icon: '🗓️', ar: 'أسبوع', en: 'Week', desc: 'سبعة أيام.', audio: 'audio/time/week.mp3' },
+    { icon: '📆', ar: 'شهر', en: 'Month', desc: 'ثلاثون يوماً تقريباً.', audio: 'audio/time/month.mp3' },
+    { icon: '🗓️', ar: 'سنة', en: 'Year', desc: 'اثنا عشر شهراً.', audio: 'audio/time/year.mp3' },
+    { icon: '🌸', ar: 'ربيع', en: 'Spring', desc: 'فصل الأزهار.', audio: 'audio/time/spring.mp3' },
+    { icon: '☀️', ar: 'صيف', en: 'Summer', desc: 'فصل الحر.', audio: 'audio/time/summer.mp3' },
+    { icon: '🍂', ar: 'خريف', en: 'Autumn', desc: 'تساقط الأوراق.', audio: 'audio/time/autumn.mp3' },
+    { icon: '❄️', ar: 'شتاء', en: 'Winter', desc: 'فصل البرد.', audio: 'audio/time/winter.mp3' },
+    { icon: '⏱️', ar: 'ثانية', en: 'Second', desc: 'أقصر وحدة زمنية.', audio: 'audio/time/second.mp3' },
+    { icon: '⏳', ar: 'وقت', en: 'Time', desc: 'الزمن المنقضي.', audio: 'audio/time/time.mp3' },
+    { icon: '🕰️', ar: 'ماضي', en: 'Past', desc: 'ما انقضى.', audio: 'audio/time/past.mp3' },
+    { icon: '🔮', ar: 'مستقبل', en: 'Future', desc: 'ما سيأتي.', audio: 'audio/time/future.mp3' },
+    { icon: '⌚', ar: 'موعد', en: 'Appointment', desc: 'وقت محدد للقاء.', audio: 'audio/time/appointment.mp3' },
+    { icon: '⚡', ar: 'الآن', en: 'Now', desc: 'في هذه اللحظة.', audio: 'audio/time/now.mp3' },
+    { icon: '🔜', ar: 'قريباً', en: 'Soon', desc: 'في وقت لاحق قصير.', audio: 'audio/time/soon.mp3' },
+    { icon: '⏪', ar: 'أمس', en: 'Yesterday', desc: 'اليوم السابق.', audio: 'audio/time/yesterday.mp3' },
+    { icon: '⏩', ar: 'غداً', en: 'Tomorrow', desc: 'اليوم القادم.', audio: 'audio/time/tomorrow.mp3' },
+    { icon: '🔄', ar: 'أسبوعي', en: 'Weekly', desc: 'يتكرر كل أسبوع.', audio: 'audio/time/weekly.mp3' }
+];
+
+// --- المتحكمات والدوال البرمجية لإدارة التنقل والبطاقات الجديدة ---
+
+// 1. المنزل والأثاث
+let homeFurnIndex = 0;
+function updateHomeFurnCard() {
+    const item = homeFurnData[homeFurnIndex];
+    document.getElementById('hf-icon').innerText = item.icon;
+    document.getElementById('hf-ar').innerText = item.ar;
+    document.getElementById('hf-en').innerText = item.en;
+    document.getElementById('hf-desc').innerText = item.desc;
+    document.getElementById('homeFurn-counter').innerText = homeFurnIndex + 1;
+    document.getElementById('homeFurnCard').classList.remove('flipped');
+    playAudio(item.audio);
+}
+function nextHomeFurnCard() { homeFurnIndex = (homeFurnIndex + 1) % homeFurnData.length; updateHomeFurnCard(); }
+function prevHomeFurnCard() { homeFurnIndex = (homeFurnIndex - 1 + homeFurnData.length) % homeFurnData.length; updateHomeFurnCard(); }
+
+// 2. المهن والوظائف
+let jobsIndex = 0;
+function updateJobCard() {
+    const item = jobsData[jobsIndex];
+    document.getElementById('job-icon').innerText = item.icon;
+    document.getElementById('job-ar').innerText = item.ar;
+    document.getElementById('job-en').innerText = item.en;
+    document.getElementById('job-desc').innerText = item.desc;
+    document.getElementById('jobs-counter').innerText = jobsIndex + 1;
+    document.getElementById('jobsCard').classList.remove('flipped');
+    playAudio(item.audio);
+}
+function nextJobCard() { jobsIndex = (jobsIndex + 1) % jobsData.length; updateJobCard(); }
+function prevJobCard() { jobsIndex = (jobsIndex - 1 + jobsData.length) % jobsData.length; updateJobCard(); }
+
+// 3. الملابس والأزياء
+let clothIndex = 0;
+function updateClothingCard() {
+    const item = clothingData[clothIndex];
+    document.getElementById('cl-icon').innerText = item.icon;
+    document.getElementById('cl-ar').innerText = item.ar;
+    document.getElementById('cl-en').innerText = item.en;
+    document.getElementById('cl-desc').innerText = item.desc;
+    document.getElementById('cloth-counter').innerText = clothIndex + 1;
+    document.getElementById('clothingCard').classList.remove('flipped');
+    playAudio(item.audio);
+}
+function nextClothingCard() { clothIndex = (clothIndex + 1) % clothingData.length; updateClothingCard(); }
+function prevClothingCard() { clothIndex = (clothIndex - 1 + clothingData.length) % clothingData.length; updateClothingCard(); }
+
+// 4. الطقس والطبيعة
+let weatherIndex = 0;
+function updateWeatherCard() {
+    const item = weatherData[weatherIndex];
+    document.getElementById('we-icon').innerText = item.icon;
+    document.getElementById('we-ar').innerText = item.ar;
+    document.getElementById('we-en').innerText = item.en;
+    document.getElementById('we-desc').innerText = item.desc;
+    document.getElementById('weather-counter').innerText = weatherIndex + 1;
+    document.getElementById('weatherCard').classList.remove('flipped');
+    playAudio(item.audio);
+}
+function nextWeatherCard() { weatherIndex = (weatherIndex + 1) % weatherData.length; updateWeatherCard(); }
+function prevWeatherCard() { weatherIndex = (weatherIndex - 1 + weatherData.length) % weatherData.length; updateWeatherCard(); }
+
+// 5. المواصلات والسفر
+let transIndex = 0;
+function updateTransportCard() {
+    const item = transportData[transIndex];
+    document.getElementById('tr-icon').innerText = item.icon;
+    document.getElementById('tr-ar').innerText = item.ar;
+    document.getElementById('tr-en').innerText = item.en;
+    document.getElementById('tr-desc').innerText = item.desc;
+    document.getElementById('trans-counter').innerText = transIndex + 1;
+    document.getElementById('transportCard').classList.remove('flipped');
+    playAudio(item.audio);
+}
+function nextTransportCard() { transIndex = (transIndex + 1) % transportData.length; updateTransportCard(); }
+function prevTransportCard() { transIndex = (transIndex - 1 + transportData.length) % transportData.length; updateTransportCard(); }
+
+// 6. جسم الإنسان والصحة
+let bodyIndex = 0;
+function updateBodyCard() {
+    const item = bodyData[bodyIndex];
+    document.getElementById('bo-icon').innerText = item.icon;
+    document.getElementById('bo-ar').innerText = item.ar;
+    document.getElementById('bo-en').innerText = item.en;
+    document.getElementById('bo-desc').innerText = item.desc;
+    document.getElementById('body-counter').innerText = bodyIndex + 1;
+    document.getElementById('bodyCard').classList.remove('flipped');
+    playAudio(item.audio);
+}
+function nextBodyCard() { bodyIndex = (bodyIndex + 1) % bodyData.length; updateBodyCard(); }
+function prevBodyCard() { bodyIndex = (bodyIndex - 1 + bodyData.length) % bodyData.length; updateBodyCard(); }
+
+// 7. الألوان والأشكال
+let colIndex = 0;
+function updateColorCard() {
+    const item = colorsData[colIndex];
+    document.getElementById('co-icon').innerText = item.icon;
+    document.getElementById('co-ar').innerText = item.ar;
+    document.getElementById('co-en').innerText = item.en;
+    document.getElementById('co-desc').innerText = item.desc;
+    document.getElementById('col-counter').innerText = colIndex + 1;
+    document.getElementById('colorsCard').classList.remove('flipped');
+    playAudio(item.audio);
+}
+function nextColorCard() { colIndex = (colIndex + 1) % colorsData.length; updateColorCard(); }
+function prevColorCard() { colIndex = (colIndex - 1 + colorsData.length) % colorsData.length; updateColorCard(); }
+
+// 8. الوقت والزمان
+let timeIndex = 0;
+function updateTimeCard() {
+    const item = timeData[timeIndex];
+    document.getElementById('ti-icon').innerText = item.icon;
+    document.getElementById('ti-ar').innerText = item.ar;
+    document.getElementById('ti-en').innerText = item.en;
+    document.getElementById('ti-desc').innerText = item.desc;
+    document.getElementById('time-counter').innerText = timeIndex + 1;
+    document.getElementById('timeCard').classList.remove('flipped');
+    playAudio(item.audio);
+}
+function nextTimeCard() { timeIndex = (timeIndex + 1) % timeData.length; updateTimeCard(); }
+function prevTimeCard() { timeIndex = (timeIndex - 1 + timeData.length) % timeData.length; updateTimeCard(); }
+    // --- 9. تدريب النطق الصوتي ---
+    const speechWords = [
+        { ar: 'تفاحة', en: 'Apple', audio: 'audio/words/apple.mp3' },
+        { ar: 'ماء', en: 'Water', audio: 'audio/words/water.mp3' },
+        { ar: 'كتاب', en: 'Book', audio: 'audio/words/book.mp3' },
+        { ar: 'مدرسة', en: 'School', audio: 'audio/words/school.mp3' },
+        { ar: 'أب', en: 'Father', audio: 'audio/words/father.mp3' },
+        { ar: 'واحد', en: 'One (1)', audio: 'audio/numbers/1.mp3' },
+        { ar: 'عشرون', en: 'Twenty (20)', audio: 'audio/numbers/20.mp3' },
+        { ar: 'خمسون', en: 'Fifty (50)', audio: 'audio/numbers/50.mp3' },
+        { ar: 'مئة', en: 'One Hundred (100)', audio: 'audio/numbers/100.mp3' }
+    ];
+    let speechIndex = 0;
+
+    function playCurrentSpeechAudio() {
+        const currentObj = speechWords[speechIndex];
+        if (currentObj && currentObj.audio) {
+            playAudio(currentObj.audio);
+        }
+    }
+
+    function nextSpeechWord() {
+        speechIndex = (speechIndex + 1) % speechWords.length;
+        const currentObj = speechWords[speechIndex];
+        document.getElementById('target-word').innerText = currentObj.ar + " 🔊";
+        document.getElementById('target-word-en').innerText = currentObj.en;
+        const micButton = document.getElementById('micButton');
+        micButton.className = "btn btn-primary mic-btn shadow-sm";
+        document.getElementById('feedback-result').innerText = "اضغط وابدأ الكلام...";
+        playAudio(currentObj.audio);
+    }
+
+    function normalizeArabicText(text) {
+        if (!text) return '';
+        return text
+            .trim()
+            .toLowerCase()
+            .replace(/[\u064b-\u065f]/g, '')
+            .replace(/[أإآٱ]/g, 'ا')
+            .replace(/ة/g, 'ه')
+            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟ء]/g, '')
+            .replace(/\s+/g, '');
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+    let isListening = false;
+
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ar-SA';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        const micButton = document.getElementById('micButton');
+        const feedbackResult = document.getElementById('feedback-result');
+        const targetWordElement = document.getElementById('target-word');
+
+        window.toggleSpeechRecognition = function() {
+            if (!isListening) {
+                try { recognition.start(); } catch (e) { console.error(e); }
+            } else {
+                recognition.stop();
+            }
+        };
+
+        recognition.onstart = function() {
+            isListening = true;
+            micButton.classList.add('listening');
+            feedbackResult.innerText = "جاري الاستماع... انطق الآن 🗣️";
+            feedbackResult.className = "text-info mt-2 fw-bold";
+        };
+
+        recognition.onresult = function(event) {
+            const speechResult = event.results[0][0].transcript.trim();
+            const targetWordFull = targetWordElement.innerText.trim();
+            const targetWord = targetWordFull.replace(" 🔊", "");
+            
+            const cleanSpeech = normalizeArabicText(speechResult);
+            const cleanTarget = normalizeArabicText(targetWord);
+            const speechWithoutAl = cleanSpeech.replace(/^ال/, '');
+            const targetWithoutAl = cleanTarget.replace(/^ال/, '');
+
+            if (cleanSpeech === cleanTarget || speechWithoutAl === targetWithoutAl || cleanSpeech.includes(cleanTarget) || cleanTarget.includes(cleanSpeech)) {
+                feedbackResult.innerHTML = `رائع! نطق صحيح: <span class="text-success">"${speechResult}"</span> 🎉`;
+                micButton.classList.remove('btn-primary');
+                micButton.classList.add('btn-success');
+                playAudio('audio/sfx/correct.mp3');
+                ProgressManager.addPoints(10);
+            } else {
+                feedbackResult.innerHTML = `قلت: <span class="text-danger">"${speechResult}"</span>. حاول مجدداً! ❌`;
+                micButton.classList.remove('btn-primary');
+                micButton.classList.add('btn-danger');
+                playAudio('audio/sfx/wrong.mp3');
+            }
+        };
+
+        recognition.onerror = function() {
+            feedbackResult.innerText = "حدث خطأ في التعرف على الصوت، حاول مجدداً.";
+            resetMic();
+        };
+
+        recognition.onend = function() {
+            resetMic();
+        };
+
+        function resetMic() {
+            isListening = false;
+            micButton.classList.remove('listening');
+            setTimeout(() => {
+                micButton.className = "btn btn-primary mic-btn shadow-sm";
+            }, 1000);
+        }
+    } else {
+        document.getElementById('micButton').style.display = 'none';
+        document.getElementById('feedback-result').innerText = "متصفحك لا يدعم خاصية التعرف على الصوت.";
+    }
+
+    // --- 10. لوحة الرسم (Canvas) ---
+    let canvas, ctx, painting = false;
+    function initCanvas() {
+        canvas = document.getElementById('drawingCanvas');
+        if (!canvas) return;
+        ctx = canvas.getContext('2d');
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#1e293b';
+
+        canvas.addEventListener('mousedown', startPosition);
+        canvas.addEventListener('mouseup', finishedPosition);
+        canvas.addEventListener('mousemove', draw);
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const mouseEvent = new MouseEvent('mouseup', {});
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+    }
+
+    function startPosition(e) {
+        painting = true;
+        draw(e);
+    }
+    function finishedPosition() {
+        painting = false;
+        ctx.beginPath();
+    }
+    function draw(e) {
+        if (!painting) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+        ctx.lineTo((clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo((clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY);
+    }
+    function clearCanvas() {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // --- 11. PWA والتثبيت ---
+    let deferredPrompt;
+    const installAppBtn = document.getElementById('installAppBtn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (installAppBtn) installAppBtn.style.display = 'inline-block';
+    });
+
+    window.installApp = async function() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        if (installAppBtn) installAppBtn.style.display = 'none';
+    };
+
+    window.addEventListener('appinstalled', () => {
+        if (installAppBtn) installAppBtn.style.display = 'none';
+    });
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch((err) => console.log(err));
+        });
+    }
+</script>
+<!-- قسم أزرار التطبيق -->
+<div class="app-actions">
+    <!-- زر التثبيت مخفي افتراضياً حتى يتحقق المتصفح من إمكانية التثبيت -->
+    <button id="installBtn" class="btn install-btn" style="display: none;">
+        📥 تثبيت التطبيق
+    </button>
+    
+    <button id="shareBtn" class="btn share-btn">
+        📤 مشاركة التطبيق
+    </button>
+</div>
+
+<!-- قسم حقوق التطوير والتصميم -->
+<footer class="app-footer">
+    <div class="developer-rights">
+        تم التطوير والتصميم بكل ❤️ بواسطة 
+<a href="https://github.com/wazefapress" target="_blank" rel="noopener noreferrer">هيثم زيدان</a>
+
+    </div>
+    
+    <!-- رابط GitHub المنسق مع أيقونة -->
+    <a href="https://github.com/wazefapress/Arabic-Learning" target="_blank" rel="noopener noreferrer" class="github-link">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+        </svg>
+        <span>تابع المشاريع على GitHub</span>
+    </a>
+</footer>
+<script>
+// 1. منطق زر تثبيت التطبيق (PWA)
+let deferredPrompt;
+const installBtn = document.getElementById('installBtn');
+
+// الاستماع لحدث التثبيت من المتصفح
+window.addEventListener('beforeinstallprompt', (e) => {
+    // منع ظهور النافذة الافتراضية
+    e.preventDefault();
+    // حفظ الحدث لاستخدامه لاحقاً
+    deferredPrompt = e;
+    // إظهار زر التثبيت
+    installBtn.style.display = 'inline-block';
+});
+
+installBtn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+        // إظهار نافذة التثبيت للمستخدم
+        deferredPrompt.prompt();
+        
+        // انتظار اختيار المستخدم
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            console.log('تم قبول تثبيت التطبيق');
+        } else {
+            console.log('تم رفض تثبيت التطبيق');
+        }
+        
+        // تصفير المتغير وإخفاء الزر بعد الاختيار
+        deferredPrompt = null;
+        installBtn.style.display = 'none';
+    }
+});
+
+// إخفاء زر التثبيت إذا تم تثبيت التطبيق بنجاح
+window.addEventListener('appinstalled', () => {
+    installBtn.style.display = 'none';
+    deferredPrompt = null;
+    console.log('التطبيق مثبت بالفعل');
+});
+
+// 2. منطق زر مشاركة التطبيق
+const shareBtn = document.getElementById('shareBtn');
+
+shareBtn.addEventListener('click', async () => {
+    // التحقق مما إذا كان المتصفح يدعم ميزة المشاركة (متوفرة في أغلب الهواتف الذكية)
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: document.title, // يأخذ عنوان الصفحة تلقائياً
+                text: 'اكتشف هذا التطبيق الرائع!',
+                url: window.location.href // يشارك الرابط الحالي للتطبيق
+            });
+            console.log('تمت المشاركة بنجاح');
+        } catch (error) {
+            console.log('حدث خطأ أثناء المشاركة أو تم الإلغاء:', error);
+        }
+    } else {
+        // بديل للمتصفحات التي لا تدعم المشاركة (مثل متصفحات سطح المكتب القديمة)
+        alert('ميزة المشاركة المباشرة غير مدعومة في هذا المتصفح. يمكنك نسخ الرابط من شريط العنوان.');
+    }
+});
+</script>
+</body>
+</html>
