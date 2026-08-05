@@ -34,4 +34,5 @@
 └── sw.js            # ملف خدمة التشغيل للتخزين المؤقت والعمل دون إنترنت
 ```
 رابط التطبيق 
-https://arabic.haythamzeidan.workers.dev/
+
+https://wazefapress.github.io/Arabic-Learning/
