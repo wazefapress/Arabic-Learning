@@ -36,3 +36,5 @@
 رابط التطبيق 
 
 https://wazefapress.github.io/Arabic-Learning/
+أو
+https://arabic.haythamzeidan.workers.dev/
