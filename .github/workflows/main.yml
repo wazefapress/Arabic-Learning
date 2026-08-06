@@ -1,0 +1,11 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60 # زيادة الوقت إلى ساعة كاملة
+    steps:
+      - uses: actions/checkout@v4
+      # ضع خطوات مشروعك هنا
