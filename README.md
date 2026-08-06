@@ -33,8 +33,11 @@
 ├── manifest.json    # ملف تعريف تطبيق الـ PWA
 └── sw.js            # ملف خدمة التشغيل للتخزين المؤقت والعمل دون إنترنت
 ```
-رابط التطبيق 
+رابط التطبيق 📖 📕 📚 
 
 https://wazefapress.github.io/Arabic-Learning/
-أو
+
+أو 
+
+
 https://arabic.haythamzeidan.workers.dev/
