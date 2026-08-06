@@ -25,6 +25,10 @@
             <button id="installAppBtn" class="btn btn-success btn-sm fw-bold" style="display: none;" onclick="installApp()">
                 📱 تثبيت التطبيق
             </button>
+             <button class="btn btn-info btn-sm fw-bold text-white" onclick="shareApp()">
+        📤 مشاركة
+    </button>
+</div>
             <span class="badge bg-warning text-dark fs-6">⭐ النقاط: <span id="user-score">0</span></span>
             <button class="btn btn-outline-danger btn-sm" onclick="ProgressManager.resetProgress()">إعادة ضبط</button>
         </div>
@@ -37,7 +41,7 @@
                 <div class="card h-100 shadow-sm text-bg-light card-box" onclick="setActiveSection('games')">
                     <div class="card-body py-4">
                         <h1 class="display-4 text-purple">🎮</h1>
-                        <h5 class="card-title mt-3 fs-6 fs-md-5">لعبة الكلمات (Phaser)</h5>
+                        <h5 class="card-title mt-3 fs-6 fs-md-5">لعبة الكلمات </h5>
                     </div>
                 </div>
             </div>
@@ -2062,18 +2066,25 @@ function prevTimeCard() { timeIndex = (timeIndex - 1 + timeData.length) % timeDa
             navigator.serviceWorker.register('./sw.js').catch((err) => console.log(err));
         });
     }
+    // --- نظام مشاركة التطبيق ---
+function shareApp() {
+    if (navigator.share) {
+        navigator.share({
+            title: 'تطبيق تعلم العربية',
+            text: 'جرب هذا التطبيق الرائع التفاعلي لتعلم اللغة العربية بسهولة ومرح!',
+            url: window.location.href // يقوم بمشاركة الرابط الحالي للتطبيق
+        })
+        .then(() => console.log('تمت المشاركة بنجاح'))
+        .catch((error) => console.log('حدث خطأ أثناء المشاركة:', error));
+    } else {
+        // رسالة بديلة في حال كان المتصفح القديم لا يدعم ميزة المشاركة
+        alert('عذراً، ميزة المشاركة غير مدعومة في متصفحك الحالي. يمكنك نسخ رابط الصفحة بالأعلى ومشاركته.');
+    }
+}
 </script>
 <!-- قسم أزرار التطبيق -->
-<div class="app-actions">
-    <!-- زر التثبيت مخفي افتراضياً حتى يتحقق المتصفح من إمكانية التثبيت -->
-    <button id="installBtn" class="btn install-btn" style="display: none;">
-        📥 تثبيت التطبيق
-    </button>
-    
-    <button id="shareBtn" class="btn share-btn">
-        📤 مشاركة التطبيق
-    </button>
-</div>
+
+
 
 <!-- قسم حقوق التطوير والتصميم -->
 <footer class="app-footer">
@@ -2132,27 +2143,7 @@ window.addEventListener('appinstalled', () => {
     console.log('التطبيق مثبت بالفعل');
 });
 
-// 2. منطق زر مشاركة التطبيق
-const shareBtn = document.getElementById('shareBtn');
 
-shareBtn.addEventListener('click', async () => {
-    // التحقق مما إذا كان المتصفح يدعم ميزة المشاركة (متوفرة في أغلب الهواتف الذكية)
-    if (navigator.share) {
-        try {
-            await navigator.share({
-                title: document.title, // يأخذ عنوان الصفحة تلقائياً
-                text: 'اكتشف هذا التطبيق الرائع!',
-                url: window.location.href // يشارك الرابط الحالي للتطبيق
-            });
-            console.log('تمت المشاركة بنجاح');
-        } catch (error) {
-            console.log('حدث خطأ أثناء المشاركة أو تم الإلغاء:', error);
-        }
-    } else {
-        // بديل للمتصفحات التي لا تدعم المشاركة (مثل متصفحات سطح المكتب القديمة)
-        alert('ميزة المشاركة المباشرة غير مدعومة في هذا المتصفح. يمكنك نسخ الرابط من شريط العنوان.');
-    }
-});
 </script>
 </body>
 </html>
